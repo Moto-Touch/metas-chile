@@ -201,6 +201,7 @@ function errMsg(e){
   if (/Usuario sin acceso/.test(m)) return 'Tu usuario existe pero no tiene acceso a esta aplicación. Pide a Motorola que lo habilite.';
   if (/solo lectura/.test(m)) return 'Tu usuario es de solo lectura.';
   if (/JWT|expired|Invalid Refresh/i.test(m)) return 'La sesión venció. Vuelve a iniciar sesión.';
+  if (/statement timeout/i.test(m)) return 'TRADE tardó demasiado en responder. Vuelve a intentar.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Sin conexión con TRADE. Revisa tu red y vuelve a intentar.';
   if (/Invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos.';
   return m;
@@ -412,9 +413,8 @@ function renderTabs(){ const t = curTab(); document.querySelectorAll('#tabs a').
 function renderMain(){
   const m = $('#main');
   if (S.mode === 'login') { renderLogin(); return; }
-  if (S.mode === 'loading') { m.innerHTML = '<div class="empty">Cargando…</div>'; return; }
   if (S.loadError && !S.base) { m.innerHTML = `<div class="banner bad"><p>${esc(S.loadError)}</p><button id="b-retry">Reintentar</button></div>`; $('#b-retry').onclick = () => loadAll(true); return; }
-  if (!S.base) { m.innerHTML = '<div class="empty">Cargando…</div>'; return; }
+  if (!S.base) { m.innerHTML = '<div class="empty">Cargando datos de TRADE… (unos segundos)</div>'; return; }
   let top = '';
   if (RO()) top = `<div class="banner acc"><p><b>Vista de solo lectura.</b> Ves lo que está aplicado en TRADE para ${esc(perLbl(S.periodo))}; los cambios los hace un usuario editor.</p></div>`;
   if (S.loadError) top += `<div class="banner bad"><p>${esc(S.loadError)}</p></div>`;
