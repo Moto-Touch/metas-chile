@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Metas y Variable Chile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: consola de configuración — cabecera fija con período y borrador; pestañas; paneles por bloque de reglas */
+:root{
+  --bg:#f3f4f2; --panel:#ffffff; --ink:#1b2125; --muted:#5d676d; --line:#dde1df; --soft:#eceeec;
+  --accent:#1d5c63; --accent-ink:#ffffff; --accent-soft:#dcebec;
+  --ok:#2f7a45; --ok-soft:#e1f0e5; --warn:#a86a10; --warn-soft:#f7ecd9; --bad:#b23a32; --bad-soft:#f6e0de;
+  --changed:#fff4c9; --changed-line:#d9b84a;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14191b; --panel:#1b2225; --ink:#e4e8e6; --muted:#9aa5aa; --line:#2c3639; --soft:#222a2d;
+  --accent:#5fb1b8; --accent-ink:#0d1b1d; --accent-soft:#1f3a3d;
+  --ok:#6cc488; --ok-soft:#1d3426; --warn:#e0a94d; --warn-soft:#3a2d17; --bad:#ec7c73; --bad-soft:#3d2220;
+  --changed:#3a3317; --changed-line:#a88f33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14191b; --panel:#1b2225; --ink:#e4e8e6; --muted:#9aa5aa; --line:#2c3639; --soft:#222a2d;
+  --accent:#5fb1b8; --accent-ink:#0d1b1d; --accent-soft:#1f3a3d;
+  --ok:#6cc488; --ok-soft:#1d3426; --warn:#e0a94d; --warn-soft:#3a2d17; --bad:#ec7c73; --bad-soft:#3d2220;
+  --changed:#3a3317; --changed-line:#a88f33; color-scheme:dark}
+*{box-sizing:border-box}
+html{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+.login{max-width:380px;margin:12vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.login h1{font-family:var(--f-display);font-size:20px;margin:0}
+.login input{width:100%}
+.user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+.toprow{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:12px;max-width:1280px;margin:0 auto}
+.brand{display:flex;flex-direction:column;min-width:0}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:19px;margin:0;letter-spacing:-.01em}
+.brand small{color:var(--muted);font-size:12.5px}
+.grow{flex:1}
+.ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+label.lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+select,input,textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=number]{font-family:var(--f-mono);font-size:13.5px}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input:disabled,select:disabled,textarea:disabled{background:var(--soft);color:var(--muted)}
+button{font:inherit;font-weight:600;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--bad)}
+button.link{border:none;background:none;padding:2px 4px;color:var(--accent);font-weight:600}
+button:disabled{opacity:.5;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;background:var(--soft);color:var(--muted);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.acc{background:var(--accent-soft);color:var(--accent)}
+.draftbar{display:flex;align-items:center;gap:10px}
+nav.tabs{display:flex;gap:2px;max-width:1280px;margin:0 auto;overflow-x:auto}
+nav.tabs a{padding:9px 14px;color:var(--muted);text-decoration:none;font-weight:600;border-bottom:2px solid transparent;white-space:nowrap}
+nav.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+main{max-width:1280px;margin:0 auto;padding-block:20px 60px;display:flex;flex-direction:column;gap:18px}
+.banner{border-radius:8px;padding:12px 14px;border:1px solid var(--line);background:var(--panel);display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.banner.warn{background:var(--warn-soft);border-color:transparent} .banner.bad{background:var(--bad-soft);border-color:transparent} .banner.acc{background:var(--accent-soft);border-color:transparent}
+.banner p{margin:0;flex:1;min-width:220px}
+section.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel h2{font-family:var(--f-display);font-size:16.5px;font-weight:600;margin:0;text-wrap:balance}
+.panel .hint{color:var(--muted);font-size:13.5px;margin:0;max-width:78ch}
+.panel-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.formula{font-family:var(--f-mono);font-size:13px;background:var(--soft);border-radius:6px;padding:8px 10px;overflow-x:auto;white-space:nowrap}
+.tbl{overflow-x:auto;min-width:0}
+.tbl.tall{max-height:72vh;overflow:auto}
+.tbl.tall thead th{position:sticky;top:0;background:var(--panel);z-index:2;box-shadow:inset 0 -1px 0 var(--line)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:bottom}
+td{padding:6px 8px;border-bottom:1px solid var(--soft);vertical-align:middle}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:13px;white-space:nowrap}
+tr.changed td{background:var(--changed)}
+tr.changed td:first-child{box-shadow:inset 3px 0 0 var(--changed-line)}
+tr.removed td{text-decoration:line-through;color:var(--muted);background:var(--bad-soft)}
+tr.total td{font-weight:600;border-top:1px solid var(--line)}
+td input[type=number]{width:96px;text-align:right}
+td input.w-s{width:72px} td input.w-l{width:150px}
+.prev{color:var(--muted);font-family:var(--f-mono);font-size:12.5px}
+.muted{color:var(--muted)}
+.grid-params{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;border:1px solid var(--soft);border-radius:8px;padding:10px;min-width:0}
+.field.changed{background:var(--changed);border-color:var(--changed-line)}
+.field .row{display:flex;align-items:center;gap:8px}
+.field input,.field select{width:100%}
+.field .unit{color:var(--muted);font-family:var(--f-mono);font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.box{border:1px solid var(--soft);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.box h3{margin:0;font-family:var(--f-display);font-size:15px;font-weight:600}
+tr.dim td{color:var(--muted)}
+table.matrix th.stockh{vertical-align:top;min-width:92px}
+table.matrix th.stockh select{width:100%;font-size:12px;padding:2px 4px;margin-top:2px}
+table.matrix th.stockh.changed{background:var(--changed)}
+.cell{font:inherit;font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums;border:1px solid transparent;background:var(--ok-soft);color:var(--ink);border-radius:5px;padding:3px 8px;min-width:56px;cursor:pointer}
+.cell.off{background:var(--soft);color:var(--muted)}
+.cell.exc{border-color:var(--accent)}
+.cell:disabled{cursor:default}
+.sw{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-weight:600}
+input[type=file]{font-size:13px}
+.exc{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;background:var(--soft);border-radius:6px;padding:2px 4px 2px 8px;white-space:nowrap}
+.exc select{padding:2px 4px;font-size:12.5px}
+.chips select[data-add-exc]{font-size:12.5px;padding:2px 4px;color:var(--muted)}
+.addrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding-top:6px;border-top:1px dashed var(--line)}
+.addrow .f{display:flex;flex-direction:column;gap:3px}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.stat{border:1px solid var(--soft);border-radius:8px;padding:10px 12px}
+.stat b{display:block;font-family:var(--f-display);font-size:22px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12.5px}
+details.group{border:1px solid var(--soft);border-radius:8px}
+details.group summary{cursor:pointer;padding:9px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+details.group > div{padding:0 12px 10px}
+.overlay{position:fixed;inset:0;background:rgb(0 0 0 / .45);z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:max(24px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));overflow-y:auto}
+.modal{background:var(--panel);color:var(--ink);border-radius:12px;max-width:760px;width:100%;padding:18px 20px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--line)}
+.modal h3{font-family:var(--f-display);margin:0;font-size:17px}
+.modal ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px;font-size:14px}
+pre.sql{font-family:var(--f-mono);font-size:12px;background:var(--soft);border-radius:6px;padding:10px;max-height:260px;overflow:auto;white-space:pre;margin:0}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.toast{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;z-index:30;font-weight:600;max-width:420px}
+.kbd{font-family:var(--f-mono);font-size:12.5px;background:var(--soft);padding:1px 5px;border-radius:4px}
+@media (max-width:640px){.brand small{display:none} td input[type=number]{width:80px}}
+@media (prefers-reduced-motion:no-preference){button,nav.tabs a{transition:border-color .15s,color .15s}}
+</style></head><body>
+<header class="top">
+  <div class="wrap">
+    <div class="toprow">
+      <div class="brand"><h1>Metas y Variable Chile</h1><small>Supuestos del mes · sistema MotoAgentes desde noviembre 2026 · TRADE</small></div>
+      <div class="ctrl">
+        <label class="lbl" for="sel-periodo">Período</label>
+        <select id="sel-periodo" disabled><option>Cargando…</option></select>
+        <span id="pill-estado" class="pill">—</span>
+      </div>
+      <div class="grow"></div>
+      <div class="draftbar" id="draftbar"></div>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Secciones">
+      <a href="#portafolio">Portafolio</a>
+      <a href="#meta">Construcción de la meta</a>
+      <a href="#variable">Variable</a>
+      <a href="#metas">Metas</a>
+      <a href="#checklist">Checklist</a>
+      <a href="#bitacora">Bitácora</a>
+    </nav>
+  </div>
+</header>
+<div class="wrap"><main id="main"><div class="empty">Cargando…</div></main></div>
+<div id="modal-root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(() => {
+'use strict';
+const SUPA_URL = 'https://noskbefdrtayhwydlbfx.supabase.co';
+const SUPA_KEY = 'sb_publishable_5aLhvx4RAy5yqmRuLz4-zg_ZfuEppFV';
+const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+const TABS = ['portafolio','meta','variable','metas','checklist','bitacora'];
+const TRAMO_LBL = {1:'Base',2:'Medio',3:'Alto'};
+
+const S = {
+  mode: 'loading', yo: null,
+  periodos: [], periodo: null, prev: null,
+  base: null, work: null,
+  metas: null, compPeriodo: null, metasFiltro: {cuenta:'', q:''}, margen: 0,
+  check: null, foto: null, offReason: '', loadError: null,
+  tramoFiltro: 'miden', vistaPort: 'nacional', cuentaCat: '', busy: false, importPrev: null,
+};
+
+// ---------- utilidades ----------
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf0 = new Intl.NumberFormat('es-CL',{maximumFractionDigits:0});
+const nf1 = new Intl.NumberFormat('es-CL',{minimumFractionDigits:1,maximumFractionDigits:1});
+const N = (v) => v == null || v === '' || isNaN(+v) ? null : +v;
+const fN = (v) => N(v) == null ? '—' : nf0.format(+v);
+const fCLP = (v) => N(v) == null ? '—' : '$' + nf0.format(+v);
+const fP = (v) => N(v) == null ? '—' : nf1.format(+v * 100) + '%';
+const toPctInput = (v) => N(v) == null ? '' : +(+v * 100).toFixed(2);
+const fromPctInput = (s) => s === '' || s == null ? null : +(+s / 100).toFixed(6);
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const clone = (o) => JSON.parse(JSON.stringify(o ?? null));
+const pago5 = (precio) => N(precio) == null ? null : Math.round(+precio * 0.05 / 500) * 500;
+function store(k, v){ try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch(e){ return null; } }
+function toast(msg){ const t = document.createElement('div'); t.className='toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(()=>t.remove(), 3500); }
+const fW = (w) => w ? String(w).slice(0,4) + ' W' + String(w).slice(4) : '—';
+const perKey = (p) => p ? p.anio + '|' + p.nombre : '';
+const perLbl = (p) => p ? p.nombre + ' ' + p.anio : '—';
+const cname = (id) => (((S.base && S.base.cuentas) || []).find(c => String(c.id) === String(id)) || {}).nombre || ('cuenta ' + id);
+const RO = () => !(S.yo && S.yo.rol === 'editor');
+
+// ---------- acceso a TRADE (Supabase Auth + RPC) ----------
+async function rpc(fn, args){
+  const { data, error } = await sb.rpc(fn, args || {});
+  if (error) throw error;
+  return data;
+}
+function errMsg(e){
+  const m = (e && (e.message || e.error_description || e.msg)) || String(e);
+  if (/Usuario sin acceso/.test(m)) return 'Tu usuario existe pero no tiene acceso a esta aplicación. Pide a Motorola que lo habilite.';
+  if (/solo lectura/.test(m)) return 'Tu usuario es de solo lectura.';
+  if (/JWT|expired|Invalid Refresh/i.test(m)) return 'La sesión venció. Vuelve a iniciar sesión.';
+  if (/Failed to fetch|NetworkError/i.test(m)) return 'Sin conexión con TRADE. Revisa tu red y vuelve a intentar.';
+  if (/Invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos.';
+  return m;
+}
+// ---------- carga ----------
+function pickParams(r){ return {gate:N(r.gate_volumen_pct), peso_medio:N(r.peso_medio), peso_alto:N(r.peso_alto), piso:N(r.piso_tramo_pct), techo:N(r.techo_tramo_pct), umbral90:N(r.regla90_umbral), masivo_x: r.masivo_max_diario == null ? null : +r.masivo_max_diario, masivo_desc: r.masivo_descuenta_cumplimiento, estado: r.estado, notas: r.notas || ''}; }
+function pickPMeta(r){ return {semanas: r.semanas == null ? null : +r.semanas, gfk:N(r.factor_gfk), share_def:N(r.share_objetivo_default), piso_desempeno: !!r.piso_desempeno, evento: r.evento_nombre || '', alza_medio:N(r.alza_medio_pct), alza_medio_extra:N(r.alza_medio_extra_pct), alza_alto:N(r.alza_alto_pct), min_sig: r.min_signature_alto == null ? 0 : +r.min_signature_alto, f_fuera:N(r.factor_stock_fuera_meta), por_stock: !!r.reparto_por_stock, notas: r.notas || ''}; }
+function pickTramo(r){ return {match: r.market_name_match, tramo: +r.tramo, sp: !!r.es_super_premium, pago: N(r.pago_unidad_sp), vigencia: r.vigencia, mide: r.mide !== false, cuentas: {}}; }
+function pickMoto(r){ return {precio: N(r.precio_lista), pago: N(r.pago_unidad), regla: r.regla, nota: r.nota || ''}; }
+function pickRegla(r){ return {prod:N(r.piso_productividad_dia), tope:N(r.tope_share_piso), min_b:N(r.min_base), min_m:N(r.min_medio), min_a:N(r.min_alto), max_a:N(r.max_alto), sig:r.min_signature_sin_stock == null ? null : +r.min_signature_sin_stock, por_venta: !!r.reparto_por_venta, motivo: r.motivo || ''}; }
+const EMPTY_REGLA = () => ({prod:null, tope:null, min_b:null, min_m:null, min_a:null, max_a:null, sig:null, por_venta:false, motivo:''});
+const reglaVacia = (r) => !r || (r.prod==null && r.tope==null && r.min_b==null && r.min_m==null && r.min_a==null && r.max_a==null && r.sig==null && !r.por_venta);
+function normBase(d){
+  const arr = (x) => Array.isArray(x) ? x : [];
+  const base = {
+    params: d.params ? pickParams(d.params) : null, params_prev: d.params_prev ? pickParams(d.params_prev) : null,
+    pmeta: d.pmeta ? pickPMeta(d.pmeta) : null, pmeta_prev: d.pmeta_prev ? pickPMeta(d.pmeta_prev) : null,
+    tramos: Object.fromEntries(arr(d.tramos).map(r => [r.modelo_nombre, pickTramo(r)])),
+    tramos_prev: Object.fromEntries(arr(d.tramos_prev).map(r => [r.modelo_nombre, pickTramo(r)])),
+    master: Object.fromEntries(arr(d.master).map(r => [r.modelo_nombre, r])),
+    moto: Object.fromEntries(arr(d.moto).map(r => [r.accesorio, pickMoto(r)])),
+    moto_prev: Object.fromEntries(arr(d.moto_prev).map(r => [r.accesorio, pickMoto(r)])),
+    cuentas: arr(d.cuentas),
+    stc: Object.fromEntries(arr(d.stc).map(r => [r.cuenta_id, {b:N(r.pct_base), m:N(r.pct_medio), a:N(r.pct_alto), desde: r.periodo_nombre + ' ' + r.anio, propio: r.anio === S.periodo.anio && r.periodo_nombre === S.periodo.nombre}])),
+    rango: Object.fromEntries(arr(d.rango).map(r => [r.cuenta_id, {min:N(r.share_min), max:N(r.share_max), motivo:r.motivo || '', desde: r.periodo_nombre + ' ' + r.anio, propio: r.anio === S.periodo.anio && r.periodo_nombre === S.periodo.nombre}])),
+    regla: Object.fromEntries(arr(d.regla).map(r => [r.cuenta_id, pickRegla(r)])),
+    headcount: Object.fromEntries(arr(d.headcount).map(r => [r.cargo, +r.n])),
+    semanas: Object.fromEntries(arr(d.stock && d.stock.semanas).map(r => [String(r.cuenta_id), r])),
+    stock: Object.fromEntries(arr(d.stock && d.stock.stock).map(r => [r.cuenta_id + '|' + r.modelo, r])),
+    otros: arr(d.stock && d.stock.otros),
+    metas_periodos: arr(d.metas_periodos),
+    ovr_meta: {}, ovr_tam: {},
+  };
+  for (const e of arr(d.tramos_cuenta)) if (base.tramos[e.modelo_nombre]) base.tramos[e.modelo_nombre].cuentas[String(e.cuenta_id)] = {estado: e.estado, motivo: e.motivo || ''};
+  return base;
+}
+function editable(b){
+  return {params: clone(b.params), pmeta: clone(b.pmeta), tramos: clone(b.tramos), moto: clone(b.moto),
+    stc: Object.fromEntries(Object.entries(b.stc).map(([k,v]) => [k, {b:v.b, m:v.m, a:v.a}])),
+    rango: Object.fromEntries(Object.entries(b.rango).map(([k,v]) => [k, {min:v.min, max:v.max, motivo:v.motivo}])),
+    regla: clone(b.regla), semana: Object.fromEntries(Object.entries(b.semanas).filter(([k,v]) => v.fuente).map(([k,v]) => [k, v.semana])), ovr_meta: clone(b.ovr_meta || {}), ovr_tam: clone(b.ovr_tam || {})};
+}
+async function loadAll(keepDraft){
+  S.busy = true; S.loadError = null; renderHeader();
+  try {
+    const d = await rpc('app_estado', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre});
+    S.periodos = d.periodos || []; S.prev = d.prev; S.base = normBase(d);
+    const saved = keepDraft ? store('draft:' + perKey(S.periodo)) : null;
+    S.work = editable(S.base);
+    if (saved && saved.v === 2) Object.assign(S.work, saved.work);
+    const curIdx = S.periodos.findIndex(p => perKey(p) === perKey(S.periodo));
+    const prevMetas = S.base.metas_periodos.filter(m => { const i = S.periodos.findIndex(p => p.anio === m.anio && p.nombre === m.nombre); return i >= 0 && i < curIdx; });
+    if (!S.compPeriodo || !S.base.metas_periodos.some(m => m.anio === S.compPeriodo.anio && m.nombre === S.compPeriodo.nombre)) { const last = prevMetas.length ? prevMetas[prevMetas.length - 1] : null; S.compPeriodo = last ? {anio: last.anio, nombre: last.nombre} : null; }
+    S.mode = 'live';
+    await Promise.all([loadMetas(), loadCheck()]);
+  } catch(e) { S.loadError = errMsg(e); }
+  finally { S.busy = false; render(); }
+}
+async function loadMetas(){
+  try {
+    const d = await rpc('app_metas', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_comp_anio: S.compPeriodo ? S.compPeriodo.anio : null, p_comp_periodo: S.compPeriodo ? S.compPeriodo.nombre : null});
+    S.metas = {filas: d.filas || [], error: null};
+    S.base.ovr_meta = Object.fromEntries((d.ovr_meta || []).map(o => [o.tienda_id, {valor:N(o.valor), motivo:o.motivo || ''}]));
+    S.base.ovr_tam = Object.fromEntries((d.ovr_tam || []).map(o => [o.tienda_id, {valor:N(o.valor), motivo:o.motivo || ''}]));
+    const saved = store('draft:' + perKey(S.periodo));
+    S.work.ovr_meta = saved && saved.work && saved.work.ovr_meta ? saved.work.ovr_meta : clone(S.base.ovr_meta);
+    S.work.ovr_tam = saved && saved.work && saved.work.ovr_tam ? saved.work.ovr_tam : clone(S.base.ovr_tam);
+  } catch(e) { S.metas = {filas: [], error: errMsg(e)}; }
+}
+async function loadCheck(){
+  try { const d = await rpc('app_checklist', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre}); S.check = {oficial: d.oficial || [], sin_clasificar: d.sin_clasificar || [], semana_ref: d.semana_ref, log: d.log || [], error: null}; }
+  catch(e){ S.check = {oficial: [], sin_clasificar: [], stock_no_mide: [], log: [], error: errMsg(e)}; }
+}
+function saveDraft(){ store('draft:' + perKey(S.periodo), {v:2, work: S.work}); }
+
+// ---------- diff del borrador ----------
+const PARAM_FIELDS = [
+  ['gate','Gate de volumen','pct'],['peso_medio','Peso tramo Medio','pct'],['peso_alto','Peso tramo Alto','pct'],['piso','Piso por tramo','pct'],['techo','Techo por tramo','pct'],['umbral90','Umbral regla del 90%','pct'],
+  ['masivo_x','Máx. unidades diarias antes de presumir masivo','int'],['masivo_desc','Masivos descuentan del cumplimiento','bool'],['estado','Estado de los parámetros','txt'],['notas','Notas','txt'],
+];
+const PMETA_FIELDS = [
+  ['semanas','Semanas del ciclo','int'],['gfk','Factor GfK','num'],['share_def','Share objetivo por defecto','pct'],['piso_desempeno','Piso de desempeño','bool'],['evento','Evento comercial','txt'],
+  ['alza_medio','Alza Medio por evento','pct'],['alza_medio_extra','Alza adicional Medio si stock ≥ meta','pct'],['alza_alto','Alza Alto por evento','pct'],['min_sig','Mínimo Alto con stock Signature','int'],
+  ['f_fuera','Factor stock fuera de meta','num'],['por_stock','Reparto por stock de la tienda','bool'],['notas','Notas','txt'],
+];
+function fmtField(kind, v){ if (kind==='pct') return fP(v); if (kind==='bool') return v == null ? 'pendiente' : v ? 'sí' : 'no'; if (v == null || v === '') return '—'; return String(v); }
+function descTramo(t){ const exc = Object.entries(t.cuentas || {}).map(([id, e]) => cname(id) + ': ' + e.estado); return `${TRAMO_LBL[t.tramo]}${t.sp ? ' · SP ' + fCLP(t.pago) : ''} · ${t.mide ? 'mide' : 'no mide'}${t.vigencia === 'EOL' ? ' (EOL)' : ''}${exc.length ? ' · ' + exc.join(', ') : ''}`; }
+function changes(){
+  if (!S.base || !S.work) return [];
+  const out = [], b = S.base, w = S.work;
+  if (b.params && w.params) for (const [k, lbl, kind] of PARAM_FIELDS) if (!same(b.params[k], w.params[k])) out.push({tabla:'param_variable_periodo', clave:k, txt:`${lbl}: ${fmtField(kind,b.params[k])} → ${fmtField(kind,w.params[k])}`, antes:b.params[k], despues:w.params[k]});
+  if (b.pmeta && w.pmeta) for (const [k, lbl, kind] of PMETA_FIELDS) if (!same(b.pmeta[k], w.pmeta[k])) out.push({tabla:'param_meta_periodo', clave:k, txt:`${lbl}: ${fmtField(kind,b.pmeta[k])} → ${fmtField(kind,w.pmeta[k])}`, antes:b.pmeta[k], despues:w.pmeta[k]});
+  for (const m of new Set([...Object.keys(b.tramos), ...Object.keys(w.tramos)])) { const x = b.tramos[m] || null, y = w.tramos[m] || null; if (!same(x, y)) out.push({tabla:'tramo_producto_periodo', clave:m, txt: !y ? `Quitar modelo ${m}` : !x ? `Agregar modelo ${m}: ${descTramo(y)}` : `${m}: ${descTramo(x)} → ${descTramo(y)}`, antes:x, despues:y}); }
+  for (const a of new Set([...Object.keys(b.moto), ...Object.keys(w.moto)])) { const x = b.moto[a] || null, y = w.moto[a] || null; if (!same(x, y)) out.push({tabla:'pago_motothings_periodo', clave:a, txt: !y ? `Quitar accesorio ${a}` : !x ? `Agregar accesorio ${a}: ${fCLP(y.pago)}` : `${a}: ${fCLP(x.pago)} → ${fCLP(y.pago)}${x.precio!==y.precio ? ' (lista ' + fCLP(y.precio) + ')' : ''}${x.nota!==y.nota ? ' · nota' : ''}`, antes:x, despues:y}); }
+  for (const id of Object.keys(w.stc)) { const x = b.stc[id] ? {b:b.stc[id].b, m:b.stc[id].m, a:b.stc[id].a} : null, y = w.stc[id]; if (!same(x, y)) out.push({tabla:'share_tramo_cuenta', clave:id, txt:`Reparto fijo ${cname(id)}: ${x ? fP(x.b)+' / '+fP(x.m)+' / '+fP(x.a) : '—'} → ${fP(y.b)} / ${fP(y.m)} / ${fP(y.a)}`, antes:x, despues:y}); }
+  for (const id of Object.keys(w.rango)) { const r = b.rango[id]; const x = r && (r.min!=null||r.max!=null||r.motivo) ? {min:r.min, max:r.max, motivo:r.motivo} : null, y = w.rango[id]; const yv = y && (y.min != null || y.max != null || y.motivo) ? y : null; if (!same(x, yv)) out.push({tabla:'share_rango_cuenta', clave:id, txt:`Rango share ${cname(id)}: ${x ? fP(x.min)+'–'+fP(x.max) : 'sin rango'} → ${yv ? fP(yv.min)+'–'+fP(yv.max) : 'sin rango'}`, antes:x, despues:yv}); }
+  for (const id of new Set([...Object.keys(b.regla), ...Object.keys(w.regla)])) { const x = reglaVacia(b.regla[id]) ? null : b.regla[id], y = reglaVacia(w.regla[id]) ? null : w.regla[id]; if (!same(x, y)) out.push({tabla:'regla_cuenta_periodo', clave:id, txt:`Reglas ${cname(id)}: ${descRegla(x)} → ${descRegla(y)}`, antes:x, despues:y}); }
+  for (const id of new Set([...Object.keys(Object.fromEntries(Object.entries(b.semanas).filter(([k,v]) => v.fuente))), ...Object.keys(w.semana)])) { const x = b.semanas[id] && b.semanas[id].fuente ? b.semanas[id].semana : null, y = w.semana[id] ?? null; if (!same(x, y)) out.push({tabla:'semana_stock_cuenta_periodo', clave:id, txt:`Semana de stock ${cname(id)}: ${x ? fW(x) : 'sugerida (' + fW((b.semanas[id]||{}).sugerida) + ')'} → ${y ? fW(y) : 'sugerida'}`, antes:x, despues:y}); }
+  const tname = (id) => ((S.metas && S.metas.filas.find(f => String(f.tienda_id) === String(id))) || {}).tienda || ('tienda ' + id);
+  for (const [k, tabla, lbl] of [['ovr_meta','meta_override_manual','Meta manual'],['ovr_tam','tam_override_manual','TAM manual']]) for (const id of new Set([...Object.keys(b[k] || {}), ...Object.keys(w[k] || {})])) { const x = (b[k]||{})[id] || null, y = (w[k]||{})[id] || null; if (!same(x, y)) out.push({tabla, clave:id, txt: !y ? `${lbl} ${tname(id)}: quitar (${fN(x.valor)})` : `${lbl} ${tname(id)}: ${x ? fN(x.valor) : '—'} → ${fN(y.valor)} · ${y.motivo}`, antes:x, despues:y}); }
+  return out;
+}
+function descRegla(r){ if (!r) return 'sin reglas'; const p = []; if (r.prod != null) p.push(`${r.prod} u/día (tope ${fP(r.tope)})`); if (r.min_b != null || r.min_m != null || r.min_a != null) p.push(`mín ${r.min_b ?? '–'}/${r.min_m ?? '–'}/${r.min_a ?? '–'}`); if (r.max_a != null) p.push(`máx Alto ${r.max_a}`); if (r.sig != null) p.push(`Signature mín ${r.sig} sin stock`); if (r.por_venta) p.push('reparto por venta'); return p.join(', ') || 'sin reglas'; }
+
+function draftProblems(){
+  const p = [], w = S.work; if (!w) return p;
+  if (w.params) { if (Math.abs((w.params.peso_medio ?? 0) + (w.params.peso_alto ?? 0) - 1) > 1e-6) p.push('Los pesos de Medio y Alto deben sumar 100%.'); if (w.params.piso != null && w.params.piso > 1) p.push('El piso por tramo no puede superar 100%.'); if (w.params.techo != null && w.params.techo < 1) p.push('El techo por tramo no puede ser menor a 100%.'); }
+  if (w.pmeta && w.pmeta.semanas != null && (w.pmeta.semanas < 3 || w.pmeta.semanas > 6)) p.push('Las semanas del ciclo deben ser 4 o 5.');
+  for (const [m, t] of Object.entries(w.tramos)) if (t) { for (const [id, e] of Object.entries(t.cuentas || {})) if ((e.estado === 'Mide') === t.mide) p.push(`${m}: la excepción de ${cname(id)} es igual a la regla nacional; quítala.`); if (t.sp && t.tramo !== 3) p.push(`${m}: Super Premium solo puede estar en tramo Alto.`); if (t.sp && N(t.pago) == null) p.push(`${m}: falta el pago por unidad de Super Premium.`); if (t.sp && !t.mide) p.push(`${m}: un Super Premium tiene que medir.`); if (!t.match) p.push(`${m}: falta el nombre de mercado.`); }
+  for (const [a, m] of Object.entries(w.moto)) if (m && N(m.pago) == null) p.push(`${a}: falta el pago por unidad.`);
+  for (const [id, s] of Object.entries(w.stc)) { const sum = (s.b||0)+(s.m||0)+(s.a||0); if (Math.abs(sum - 1) > 0.0005) p.push(`Reparto fijo de ${cname(id)}: suma ${fP(sum)}, debe sumar 100%.`); }
+  for (const [id, r] of Object.entries(w.rango)) if (r && r.min != null && r.max != null && r.min > r.max) p.push(`Rango de ${cname(id)}: el mínimo supera al máximo.`);
+  for (const [id, r] of Object.entries(w.regla)) if (r && r.prod != null && r.tope == null) p.push(`${cname(id)}: el piso de productividad necesita un tope de share.`);
+  for (const k of ['ovr_meta','ovr_tam']) for (const o of Object.values(w[k] || {})) if (o && (!o.motivo || N(o.valor) == null)) p.push('Cada ajuste manual necesita valor y motivo.');
+  return [...new Set(p)];
+}
+
+// ---------- modal ----------
+function openModal({title, intro, items, sqlText, needMotivo, confirmLbl, onConfirm, extra}){
+  const root = $('#modal-root');
+  root.innerHTML = `<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="m-title"><div class="modal">
+    <h3 id="m-title">${esc(title)}</h3>${intro ? `<p class="muted" style="margin:0">${intro}</p>` : ''}
+    ${items && items.length ? `<ul>${items.slice(0,80).map(i => `<li>${esc(i)}</li>`).join('')}${items.length > 80 ? `<li class="muted">y ${items.length - 80} más</li>` : ''}</ul>` : ''}
+    ${extra || ''}
+    ${needMotivo ? `<div style="display:flex;flex-direction:column;gap:4px"><label class="lbl" for="m-motivo">Motivo (queda en la bitácora)</label><textarea id="m-motivo" rows="2" placeholder="Ej.: clasificación de noviembre acordada con Francisco"></textarea></div>` : ''}
+    <div id="m-err" hidden class="banner bad"><p></p></div>
+    <div class="actions"><button id="m-cancel">Cancelar</button><button id="m-ok" class="primary">${esc(confirmLbl || 'Aplicar')}</button></div></div></div>`;
+  const close = () => { root.innerHTML = ''; };
+  $('#m-cancel').onclick = close;
+  $('#m-ok').onclick = async () => {
+    const motivo = needMotivo ? $('#m-motivo').value.trim() : '';
+    if (needMotivo && motivo.length < 4) { const e = $('#m-err'); e.hidden = false; e.querySelector('p').textContent = 'Escribe un motivo: queda registrado junto al cambio.'; return; }
+    $('#m-ok').disabled = true; $('#m-ok').textContent = 'Aplicando…';
+    try { await onConfirm(motivo); close(); }
+    catch(err){ const e = $('#m-err'); e.hidden = false; e.querySelector('p').textContent = errMsg(err) + ' Nada quedó a medias: todo corre como una sola transacción.'; $('#m-ok').disabled = false; $('#m-ok').textContent = confirmLbl || 'Aplicar'; }
+  };
+}
+function openApply(){
+  const ch = changes(), probs = draftProblems();
+  if (probs.length) { openModal({title:'Hay que corregir el borrador', intro:'Antes de aplicar:', items: probs, confirmLbl:'Entendido', onConfirm: async () => {}}); return; }
+  openModal({title:`Aplicar ${ch.length} cambio${ch.length===1?'':'s'} a ${perLbl(S.periodo)}`, intro:'Se escribe en TRADE en una sola transacción y cada cambio queda en la bitácora con su antes y después.', items: ch.map(c => c.txt), needMotivo: true, confirmLbl:'Aplicar en TRADE',
+    onConfirm: async (motivo) => { await rpc('app_aplicar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_cambios: ch.map(c => ({tabla: c.tabla, clave: String(c.clave), antes: c.antes ?? null, despues: c.despues ?? null})), p_motivo: motivo}); store('draft:' + perKey(S.periodo), null); toast('Cambios aplicados en TRADE'); await loadAll(false); }});
+}
+function discardDraft(){ store('draft:' + perKey(S.periodo), null); S.work = editable(S.base); render(); toast('Borrador descartado'); }
+
+// ---------- acciones ----------
+function actCrearParams(desde){
+  const A = {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre};
+  openModal({title: desde ? `Copiar supuestos de ${perLbl(desde)}` : 'Crear supuestos con valores por defecto', intro: desde ? `Copia portafolio, reglas de la meta, variable, Motothings, rango de share y reglas por cuenta de ${esc(perLbl(desde))} a ${esc(perLbl(S.periodo))}. Semanas, GfK y evento se fijan después.` : 'Gate 70%, pesos 50/50, piso 75%, techo 120%, umbral 90%; sin portafolio ni Motothings.', confirmLbl: desde ? 'Copiar' : 'Crear',
+    onConfirm: async () => { await rpc('app_accion', Object.assign({p_accion: desde ? 'copiar' : 'crear', p_params: desde ? {anio: desde.anio, periodo: desde.nombre} : {}}, A)); toast('Supuestos creados'); await loadAll(false); }});
+}
+function actGenerar(){
+  const m = +S.margen || 0;
+  const pend = changes().filter(c => ['meta_override_manual','tam_override_manual','share_tramo_cuenta','share_rango_cuenta','param_meta_periodo'].includes(c.tabla));
+  openModal({title:`Generar metas de ${perLbl(S.periodo)} en TRADE`, intro: `Corre el motor de TRADE para todas las tiendas con cobertura vigente, con margen ${esc(nf1.format(m*100))} pp. <b>Hoy el motor aplica</b>: TAM proyectado, rango de share, piso de desempeño, piso por cobertura y ajustes manuales, con reparto fijo por cuenta. <b>No aplica todavía</b>: reparto por stock, alza por evento, mínimo Signature, mínimos KAM, piso de productividad ni stock fuera de meta. Para Noviembre, importa la Base de trabajo.` + (pend.length ? `<br><br><b>Ojo:</b> hay ${pend.length} cambio(s) en el borrador que afectan la meta y no se han aplicado.` : ''), confirmLbl:'Generar igual',
+    onConfirm: async () => { await rpc('app_accion', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_accion: 'generar', p_params: {margen: m}}); toast('Metas generadas'); await Promise.all([loadMetas(), loadCheck()]); render(); }});
+}
+function actConfirmarMetas(){
+  openModal({title:`Confirmar metas de ${perLbl(S.periodo)}`, intro:'Marca como confirmadas todas las metas con valor.', needMotivo:true, confirmLbl:'Confirmar metas',
+    onConfirm: async (motivo) => { await rpc('app_accion', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_accion: 'confirmar', p_params: {}, p_motivo: motivo}); toast('Metas confirmadas'); await Promise.all([loadMetas(), loadCheck()]); render(); }});
+}
+
+// ---------- importación de la Base de trabajo ----------
+const COLS = {codigo:['código tienda','codigo tienda'], tipo:['tipo oct','tipo nov','tipo dic','tipo'], tam:['tam oct proyectado','tam nov proyectado','tam dic proyectado','tam proyectado'], meta:['meta oct','meta nov','meta dic','meta total'], base:['meta base'], medio:['meta medio'], alto:['meta alta','meta alto'], share:['share esperado'], cadena:['cadena'], tienda:['tienda']};
+function readBase(file){
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => { try {
+      const wb = XLSX.read(fr.result, {type:'array'});
+      const name = wb.SheetNames.find(n => n.toLowerCase().trim() === 'base tiendas') || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:null});
+      let hi = rows.findIndex(r => r && r.some(c => typeof c === 'string' && c.toLowerCase().trim() === 'código tienda'));
+      if (hi < 0) throw new Error('No encontré la fila de encabezados con "Código tienda" en la hoja ' + name);
+      const hdr = rows[hi].map(c => String(c ?? '').toLowerCase().trim());
+      const idx = {}; for (const [k, names] of Object.entries(COLS)) { let j = -1; for (const n of names) { j = hdr.findIndex(h => h === n); if (j >= 0) break; } if (j < 0) { const pref = names[0].replace(/ (oct|nov|dic)\b.*/,''); j = hdr.findIndex(h => h.startsWith(pref)); } idx[k] = j; }
+      const falt = ['codigo','meta','base','medio','alto'].filter(k => idx[k] < 0); if (falt.length) throw new Error('Faltan columnas: ' + falt.join(', '));
+      const out = [];
+      for (const r of rows.slice(hi + 1)) { if (!r || !r[idx.codigo]) continue; const tipo = idx.tipo >= 0 ? String(r[idx.tipo] ?? '').toLowerCase() : ''; if (tipo && !tipo.includes('con promotor')) continue; out.push({codigo:String(r[idx.codigo]).trim(), cadena: idx.cadena>=0 ? r[idx.cadena] : null, tienda: idx.tienda>=0 ? r[idx.tienda] : null, tam: idx.tam>=0 ? N(r[idx.tam]) : null, meta: N(r[idx.meta]), base: N(r[idx.base]), medio: N(r[idx.medio]), alto: N(r[idx.alto]), share: idx.share>=0 ? N(r[idx.share]) : null}); }
+      res({hoja: name, filas: out, conTipo: idx.tipo >= 0});
+    } catch(e) { rej(e); } };
+    fr.onerror = () => rej(new Error('No se pudo leer el archivo'));
+    fr.readAsArrayBuffer(file);
+  });
+}
+function actImportar(prev){
+  const tot = prev.filas.reduce((s, f) => s + (f.meta || 0), 0);
+  openModal({title:`Importar ${prev.filas.length} tiendas a ${perLbl(S.periodo)}`, intro:`Hoja <b>${esc(prev.hoja)}</b>${prev.conTipo ? ', solo filas con promotor' : ''}: ${esc(fN(tot))} unidades de meta. Las tiendas se cruzan por código (id_local, con variantes Movistar/Hites). Las metas quedan en TRADE como <b>importada_base_touch</b>, en borrador; si vuelves a generar en TRADE, se reemplazan.`, needMotivo: true, confirmLbl:'Importar',
+    onConfirm: async (motivo) => { const r = await rpc('app_importar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_filas: prev.filas, p_motivo: motivo}); toast(r ? `Importadas ${r.importadas}; sin tienda ${r.sin_tienda}; sin cobertura ${r.sin_cobertura}` : 'Importación hecha'); S.importPrev = null; if (r && r.sin_tienda) S.importAviso = `Códigos sin tienda en TRADE: ${r.codigos_sin_match}`; await Promise.all([loadMetas(), loadCheck()]); render(); }});
+}
+
+// ---------- render ----------
+function render(){ renderHeader(); renderTabs(); renderMain(); }
+function renderHeader(){
+  const sel = $('#sel-periodo');
+  if (S.periodos.length) { sel.innerHTML = S.periodos.map(p => `<option value="${esc(perKey(p))}" ${perKey(p)===perKey(S.periodo)?'selected':''}>${esc(perLbl(p))}</option>`).join(''); sel.disabled = S.mode !== 'live' || S.busy; }
+  const pill = $('#pill-estado');
+  if (S.base && S.base.params) { const c = S.base.params.estado === 'confirmado'; pill.className = 'pill ' + (c ? 'ok' : 'warn'); pill.textContent = 'Supuestos ' + (c ? 'confirmados' : 'en borrador'); }
+  else if (S.base) { pill.className = 'pill bad'; pill.textContent = 'Sin supuestos'; }
+  else { pill.className = 'pill'; pill.textContent = S.busy ? 'Cargando…' : '—'; }
+  const bar = $('#draftbar');
+  const user = S.yo ? `<span class="user">${esc(S.yo.nombre || S.yo.email)} · ${S.yo.rol === 'editor' ? 'editor' : 'solo lectura'} <button class="link" id="b-logout">Salir</button></span>` : '';
+  if (S.mode !== 'live' || RO()) { bar.innerHTML = user; const bl0 = $('#b-logout'); if (bl0) bl0.onclick = logout; return; }
+  const n = changes().length;
+  bar.innerHTML = `${S.busy ? '<span class="pill">Consultando TRADE…</span>' : ''}${n ? `<span class="pill warn">${n} cambio${n===1?'':'s'} sin aplicar</span><button id="b-desc" class="danger">Descartar</button><button id="b-apply" class="primary">Revisar y aplicar</button>` : '<span class="pill ok">Sin cambios pendientes</span>'}${user}`;
+  const bl = $('#b-logout'); if (bl) bl.onclick = logout; const ba = $('#b-apply'); if (ba) ba.onclick = openApply; const bd = $('#b-desc'); if (bd) bd.onclick = discardDraft;
+}
+function curTab(){ const h = (location.hash || '').slice(1); return TABS.includes(h) ? h : 'portafolio'; }
+function renderTabs(){ const t = curTab(); document.querySelectorAll('#tabs a').forEach(a => a.setAttribute('aria-current', a.getAttribute('href') === '#' + t ? 'page' : 'false')); }
+function renderMain(){
+  const m = $('#main');
+  if (S.mode === 'login') { renderLogin(); return; }
+  if (S.mode === 'loading') { m.innerHTML = '<div class="empty">Cargando…</div>'; return; }
+  if (S.loadError && !S.base) { m.innerHTML = `<div class="banner bad"><p>${esc(S.loadError)}</p><button id="b-retry">Reintentar</button></div>`; $('#b-retry').onclick = () => loadAll(true); return; }
+  if (!S.base) { m.innerHTML = '<div class="empty">Cargando…</div>'; return; }
+  let top = '';
+  if (RO()) top = `<div class="banner acc"><p><b>Vista de solo lectura.</b> Ves lo que está aplicado en TRADE para ${esc(perLbl(S.periodo))}; los cambios los hace un usuario editor.</p></div>`;
+  if (S.loadError) top += `<div class="banner bad"><p>${esc(S.loadError)}</p></div>`;
+  if (!S.base.params) { m.innerHTML = top + `<section class="panel"><h2>${esc(perLbl(S.periodo))} todavía no tiene supuestos</h2><p class="hint">Cada período guarda sus propios supuestos: portafolio, reglas de la meta, variable y Motothings. Lo normal es partir del período anterior y editar lo que cambie.</p><div class="ctrl">${S.prev ? `<button class="primary" id="b-copiar">Copiar de ${esc(perLbl(S.prev))}</button>` : ''}${RO() ? '' : '<button id="b-crear">Crear con valores por defecto</button>'}</div></section>`; const bc = $('#b-copiar'); if (bc) bc.onclick = () => actCrearParams(S.prev); const bcr = $('#b-crear'); if (bcr) bcr.onclick = () => actCrearParams(null); return; }
+  const t = curTab();
+  m.innerHTML = top + ({portafolio: viewPortafolio, meta: viewMeta, variable: viewVariable, metas: viewMetas, checklist: viewCheck, bitacora: viewLog}[t])();
+  bind(t);
+}
+const prevLbl = () => S.prev ? perLbl(S.prev) : null;
+function fieldHtml(obj, prevObj, k, lbl, kind, extra, opts){
+  const w = obj, b = prevObj, ch = opts && opts.ch, id = (opts && opts.prefix || 'p') + '-' + k;
+  let input;
+  if (kind === 'pct') input = `<div class="row"><input type="number" step="0.5" min="0" max="${(opts&&opts.max)||100}" id="${id}" data-fld="${k}" data-kind="pct" value="${toPctInput(w[k])}" ${RO()||(opts&&opts.disabled)?'disabled':''}><span class="unit">%</span></div>`;
+  else if (kind === 'num') input = `<input type="number" step="0.01" min="0" id="${id}" data-fld="${k}" data-kind="num" value="${w[k] ?? ''}" placeholder="pendiente" ${RO()?'disabled':''}>`;
+  else if (kind === 'int') input = `<div class="row"><input type="number" step="1" min="0" id="${id}" data-fld="${k}" data-kind="int" value="${w[k] ?? ''}" placeholder="pendiente" ${RO()?'disabled':''}><span class="unit">${esc((opts&&opts.unit)||'')}</span></div>`;
+  else if (kind === 'bool') input = `<select id="${id}" data-fld="${k}" data-kind="bool" ${RO()?'disabled':''}>${opts && opts.nullable ? `<option value="" ${w[k]==null?'selected':''}>Pendiente</option>` : ''}<option value="true" ${w[k]===true?'selected':''}>Sí</option><option value="false" ${w[k]===false?'selected':''}>No</option></select>`;
+  else if (kind === 'sel') input = `<select id="${id}" data-fld="${k}" data-kind="txt" ${RO()?'disabled':''}>${opts.options.map(o => `<option value="${o[0]}" ${w[k]===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`;
+  else if (kind === 'txt1') input = `<input id="${id}" data-fld="${k}" data-kind="txt" value="${esc(w[k])}" placeholder="${esc((opts&&opts.ph)||'')}" ${RO()?'disabled':''}>`;
+  else input = `<textarea id="${id}" data-fld="${k}" data-kind="txt" rows="2" ${RO()?'disabled':''}>${esc(w[k])}</textarea>`;
+  return `<div class="field ${ch?'changed':''}"><label class="lbl" for="${id}">${esc(lbl)}</label>${input}${extra ? `<span class="muted" style="font-size:12.5px">${extra}</span>` : ''}${b ? `<span class="prev">antes ${esc(fmtField(kind==='sel'||kind==='txt1'?'txt':kind, b[k]))}</span>` : ''}</div>`;
+}
+
+// ----- Portafolio -----
+function viewPortafolio(){
+  const b = S.base, w = S.work, pl = prevLbl();
+  const sw = `<div class="ctrl" style="margin-bottom:-6px"><label class="lbl" for="v-port">Vista</label><select id="v-port"><option value="nacional" ${S.vistaPort==='nacional'?'selected':''}>Nacional</option><option value="cuenta" ${S.vistaPort==='cuenta'?'selected':''}>Catálogo por cuenta</option></select>${S.vistaPort==='cuenta' ? `<label class="lbl" for="c-cat">Cuenta</label><select id="c-cat">${b.cuentas.filter(c => b.semanas[String(c.id)]).map(c => `<option value="${c.id}" ${String(c.id)===String(S.cuentaCat)?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select>` : ''}</div>`;
+  if (S.vistaPort === 'cuenta') { const cid = S.cuentaCat || (b.cuentas.find(c => b.semanas[String(c.id)]) || {}).id; S.cuentaCat = cid; return sw + panelCatalogo(String(cid)) + panelMoto(pl); }
+  const keys = [...new Set([...Object.keys(b.tramos), ...Object.keys(w.tramos)])].sort((x, y) => { const tx = (w.tramos[x]||b.tramos[x]), ty = (w.tramos[y]||b.tramos[y]); return (ty.tramo - tx.tramo) || x.localeCompare(y); });
+  const vis = keys.filter(k => { const t = w.tramos[k]; if (S.tramoFiltro === 'todos' || !t) return true; const exc = Object.keys(t.cuentas||{}).length > 0; return S.tramoFiltro === 'miden' ? (t.mide || exc) : (!t.mide || exc); });
+  const nDif = keys.filter(k => w.tramos[k] && b.master[k] && b.master[k].tramo !== w.tramos[k].tramo).length;
+  const rows = vis.map(k => {
+    const x = b.tramos[k], y = w.tramos[k], m = b.master[k], pv = b.tramos_prev[k];
+    if (!y) return `<tr class="removed"><td>${esc(k)}</td><td colspan="${pl?8:7}">Se quita del período</td><td><button class="link" data-undo-tramo="${esc(k)}">Deshacer</button></td></tr>`;
+    const ch = !same(x, y), difM = m && m.tramo !== y.tramo;
+    return `<tr class="${ch?'changed':''} ${y.mide?'':'dim'}"><td><b>${esc(k)}</b><div class="muted" style="font-size:12px">${esc(y.match)}</div></td>
+      <td><select data-tramo="${esc(k)}" data-f="tramo" aria-label="Tramo de ${esc(k)}" ${RO()?'disabled':''}>${[1,2,3].map(t => `<option value="${t}" ${y.tramo===t?'selected':''}>${TRAMO_LBL[t]}</option>`).join('')}</select></td>
+      <td><label class="sw"><input type="checkbox" data-tramo="${esc(k)}" data-f="mide" ${y.mide?'checked':''} ${RO()?'disabled':''}> ${y.mide ? 'Mide' : 'No mide'}</label></td>
+      <td>${excCell(k, y)}</td>
+      <td><select data-tramo="${esc(k)}" data-f="vigencia" aria-label="Ciclo de vida ${esc(k)}" ${RO()?'disabled':''}><option ${y.vigencia==='Vigente'?'selected':''}>Vigente</option><option ${y.vigencia==='EOL'?'selected':''}>EOL</option></select></td>
+      <td><input type="checkbox" data-tramo="${esc(k)}" data-f="sp" aria-label="Super Premium ${esc(k)}" ${y.sp?'checked':''} ${RO()||y.tramo!==3?'disabled':''}></td>
+      <td class="num">${y.sp ? `<input type="number" step="5000" min="0" data-tramo="${esc(k)}" data-f="pago" value="${y.pago ?? ''}" aria-label="Pago Super Premium ${esc(k)}" ${RO()?'disabled':''}>` : '<span class="muted">—</span>'}</td>
+      <td>${m ? `${TRAMO_LBL[m.tramo]}${difM ? ' <span class="pill warn">distinto</span>' : ''}` : '<span class="pill">no está</span>'}</td>
+      ${pl ? `<td class="prev">${pv ? esc(descTramo(pv)) : 'nuevo'}</td>` : ''}
+      <td>${RO() ? '' : `<button class="link danger" data-del-tramo="${esc(k)}" aria-label="Quitar ${esc(k)}">Quitar</button>`}</td></tr>`;
+  }).join('');
+  const nMide = keys.filter(k => w.tramos[k] && w.tramos[k].mide).length, nNo = keys.filter(k => w.tramos[k] && !w.tramos[k].mide).length;
+  return sw + `<section class="panel"><div class="panel-head"><h2>Portafolio de ${esc(perLbl(S.periodo))}</h2>
+      <div class="ctrl"><span class="pill ok">${nMide} miden</span><span class="pill">${nNo} no miden</span><label class="lbl" for="f-tramo">Mostrar</label><select id="f-tramo"><option value="miden" ${S.tramoFiltro==='miden'?'selected':''}>Los que miden</option><option value="nomiden" ${S.tramoFiltro==='nomiden'?'selected':''}>Los que no miden</option><option value="todos" ${S.tramoFiltro==='todos'?'selected':''}>Todos</option></select></div></div>
+    <p class="hint">Un modelo <b>mide</b> o <b>no mide</b>. Si mide, suma al Gate y a su tramo, y su stock entra al reparto de la meta. Si no mide, no cuenta para nada y su stock entra al <b>ajuste por stock fuera de meta</b>. En <b>Excepción cuenta</b> se fijan excepciones a la regla nacional (Edge 60 solo Claro, Edge 50 solo Walmart). <b>Ciclo de vida</b> es informativo. <b>Master</b> es la clasificación que usa el motor de TRADE para decidir con/sin Alto; no se toca desde aquí.${nDif ? ` <span class="pill warn">${nDif} con tramo distinto al master</span>` : ''}</p>
+    <div class="tbl tall"><table><thead><tr><th>Modelo</th><th>Tramo</th><th>Mide</th><th>Excepción cuenta</th><th>Ciclo de vida</th><th>Super Premium</th><th class="num">Pago SP (CLP/u)</th><th>Master</th>${pl?`<th>${esc(pl)}</th>`:''}<th></th></tr></thead><tbody>${rows || `<tr><td colspan="10" class="empty">Sin modelos.</td></tr>`}</tbody></table></div>
+    ${RO() ? '' : `<div class="addrow"><div class="f"><label class="lbl" for="n-modelo">Modelo</label><input id="n-modelo" placeholder="Edge 70 Pro"></div><div class="f"><label class="lbl" for="n-match">Nombre de mercado (producto)</label><input id="n-match" class="w-l" placeholder="motorola edge 70 pro"></div><div class="f"><label class="lbl" for="n-tramo">Tramo</label><select id="n-tramo"><option value="1">Base</option><option value="2">Medio</option><option value="3" selected>Alto</option></select></div><button id="b-add-tramo">Agregar modelo</button></div>`}
+  </section>
+  ${panelStock()}
+  ${panelMoto(pl)}`;
+}
+function estadoEn(t, cid){ const e = (t.cuentas || {})[String(cid)]; return e ? e.estado === 'Mide' : t.mide; }
+function panelStock(){
+  const b = S.base, w = S.work;
+  const cuentas = b.cuentas.filter(c => b.semanas[String(c.id)]);
+  if (!cuentas.length) return '';
+  const keys = Object.keys(w.tramos).filter(k => w.tramos[k]).sort((x, y) => (w.tramos[y].tramo - w.tramos[x].tramo) || x.localeCompare(y));
+  const vis = keys.filter(k => { const t = w.tramos[k]; if (S.tramoFiltro === 'todos') return true; const exc = Object.keys(t.cuentas||{}).length > 0; return S.tramoFiltro === 'miden' ? (t.mide || exc) : (!t.mide || exc); });
+  const head = cuentas.map(c => { const id = String(c.id), s = b.semanas[id], sel = w.semana[id] ?? null, usada = sel || s.sugerida || s.ultima;
+    const opts = (s.opciones || []).map(o => `<option value="${o.semana}" ${o.semana===usada?'selected':''}>${fW(o.semana)}${o.semana===s.sugerida?' ✓':''}${o.parcial?' ⚠':''}</option>`).join('');
+    const ch = !same(s.fuente ? s.semana : null, sel);
+    return `<th class="num stockh ${ch?'changed':''}"><div>${esc(c.nombre)}</div><select data-semana="${id}" aria-label="Semana de stock ${esc(c.nombre)}" ${RO()?'disabled':''}>${opts}</select><div class="muted" style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0">${sel ? 'declarada' : 'sugerida'}</div></th>`; }).join('');
+  const rows = vis.map(k => { const t = w.tramos[k];
+    return `<tr class="${t.mide?'':'dim'}"><td><b>${esc(k)}</b> <span class="muted">${TRAMO_LBL[t.tramo]}</span></td>${cuentas.map(c => { const r = b.stock[c.id + '|' + k], mide = estadoEn(t, c.id), exc = !!(t.cuentas||{})[String(c.id)]; const v = r ? N(r.prom) : null;
+      return `<td class="num"><button class="cell ${mide?'':'off'} ${exc?'exc':''}" data-cell="${esc(k)}|${c.id}" title="${esc(c.nombre)} · ${esc(k)}: ${v == null ? 'sin stock' : fN(v) + ' u en ' + r.tiendas + ' tiendas con promotor; ' + fN(r.total) + ' u en toda la cadena'}${exc ? ' · excepción' : ''}. Clic para alternar mide / no mide en esta cuenta." ${RO()?'disabled':''}>${v == null ? '·' : fN(v)}</button></td>`; }).join('')}</tr>`; }).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Inventario por cuenta</h2><span class="muted">Unidades en tiendas con promotor, en la semana de stock de cada cuenta</span></div>
+    <p class="hint">La semana se sugiere sola (✓): última semana cuyo stock está dentro de ±20% de la mediana de las 4 anteriores y con ≥90% de las tiendas habituales; ⚠ marca semanas parciales. Puedes declarar otra; queda guardada como parámetro del período. Las celdas grises son modelos que <b>no miden</b> en esa cuenta; un clic en una celda crea o quita la excepción por cuenta. Fuente: maestro oficial de stock en TRADE, tiendas canónicas.</p>
+    <div class="tbl tall"><table class="matrix"><thead><tr><th>Modelo</th>${head}</tr></thead><tbody>${rows || '<tr><td class="empty">Sin modelos.</td></tr>'}</tbody></table></div></section>`;
+}
+function panelCatalogo(cid){
+  const b = S.base, w = S.work, s = b.semanas[cid] || {}, nombre = cname(cid);
+  const sel = w.semana[cid] ?? null, usada = sel || s.sugerida || s.ultima;
+  const opts = (s.opciones || []).map(o => `<option value="${o.semana}" ${o.semana===usada?'selected':''}>${fW(o.semana)}${o.semana===s.sugerida?' ✓ sugerida':''}${o.parcial?' ⚠ parcial':''} · ${fN(o.stock)} u · ${o.tiendas} tiendas</option>`).join('');
+  const keys = Object.keys(w.tramos).filter(k => w.tramos[k]).sort((x, y) => (w.tramos[y].tramo - w.tramos[x].tramo) || ((N((b.stock[cid+'|'+y]||{}).prom)||0) - (N((b.stock[cid+'|'+x]||{}).prom)||0)) || x.localeCompare(y));
+  const rows = keys.map(k => ({k, t: w.tramos[k], r: b.stock[cid + '|' + k] || {}, mide: estadoEn(w.tramos[k], cid), exc: (w.tramos[k].cuentas||{})[cid]}));
+  const totMide = rows.filter(x => x.mide).reduce((a, x) => a + (N(x.r.prom)||0), 0), totNo = rows.filter(x => !x.mide).reduce((a, x) => a + (N(x.r.prom)||0), 0), tot = totMide + totNo;
+  const porTramo = [3,2,1].map(tr => { const v = rows.filter(x => x.mide && x.t.tramo === tr).reduce((a, x) => a + (N(x.r.prom)||0), 0); return `<div class="stat"><b>${totMide ? fP(v/totMide) : '—'}</b><span>${TRAMO_LBL[tr]} · ${fN(v)} u que miden</span></div>`; }).join('');
+  const body = rows.map(x => { const v = N(x.r.prom), v4 = N(x.r.venta4), woi = v != null && v4 ? v / (v4/4) : null;
+    const estado = `<select data-cat="${esc(x.k)}" aria-label="Estado de ${esc(x.k)} en ${esc(nombre)}" ${RO()?'disabled':''}><option value="nacional" ${!x.exc?'selected':''}>Regla nacional (${x.t.mide ? 'mide' : 'no mide'})</option><option value="Mide" ${x.exc && x.exc.estado==='Mide'?'selected':''}>Excepción: mide</option><option value="No mide" ${x.exc && x.exc.estado==='No mide'?'selected':''}>Excepción: no mide</option></select>`;
+    return `<tr class="${x.mide?'':'dim'} ${x.exc?'changed':''}"><td><b>${esc(x.k)}</b>${x.t.vigencia==='EOL' ? ' <span class="pill">EOL</span>' : ''}${x.t.sp ? ' <span class="pill acc">SP</span>' : ''}</td><td>${TRAMO_LBL[x.t.tramo]}</td><td>${estado}</td><td class="num">${fN(v)}</td><td class="num">${tot && v != null ? fP(v/tot) : '—'}</td><td class="num">${x.r.tiendas ?? '—'}</td><td class="num">${fN(v4)}</td><td class="num">${woi == null ? '—' : nf1.format(woi)}</td><td class="num muted">${fN(x.r.total)}</td></tr>`; }).join('');
+  const otros = (b.otros || []).filter(o => String(o.cuenta_id) === cid);
+  const otrosRows = otros.map(o => `<tr><td>${esc(o.market_name)}</td><td class="num">${fN(o.prom)}</td><td class="num">${fN(o.venta4)}</td><td class="num muted">${fN(o.total)}</td><td>${RO() ? '' : `<button class="link" data-add-otro="${esc(o.market_name)}">Agregar al portafolio</button>`}</td></tr>`).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Catálogo de ${esc(nombre)} · ${esc(perLbl(S.periodo))}</h2>
+      <div class="ctrl"><label class="lbl" for="sem-cat">Semana de stock</label><select id="sem-cat" data-semana="${cid}" ${RO()?'disabled':''}>${opts}</select><span class="pill ${sel?'acc':''}">${sel ? 'declarada' : 'sugerida'}</span></div></div>
+    <div class="statgrid"><div class="stat"><b>${fN(tot)}</b><span>u en tiendas con promotor (${fW(usada)})</span></div><div class="stat"><b>${tot ? fP(totMide/tot) : '—'}</b><span>del stock mide · ${fN(totMide)} u</span></div><div class="stat"><b>${tot ? fP(totNo/tot) : '—'}</b><span>stock fuera de meta · ${fN(totNo)} u</span></div>${porTramo}</div>
+    <p class="hint">Propuesta del mes para esta cuenta: cada modelo hereda la regla nacional y aquí se cambia solo para ${esc(nombre)}. Stock y venta son de tiendas con promotor vigente; <b>WOI</b> = semanas de inventario (stock ÷ venta semanal promedio de 4 semanas). El % del stock que no mide alimenta el ajuste por stock fuera de meta.</p>
+    <div class="tbl tall"><table><thead><tr><th>Modelo</th><th>Tramo</th><th>Estado en ${esc(nombre)}</th><th class="num">Stock c/prom.</th><th class="num">% stock</th><th class="num">Tiendas</th><th class="num">Venta 4 sem.</th><th class="num">WOI</th><th class="num">Stock cadena</th></tr></thead><tbody>${body || '<tr><td colspan="9" class="empty">Sin modelos.</td></tr>'}</tbody></table></div>
+    ${otros.length ? `<details class="group" open><summary><b>Con stock o venta en ${esc(nombre)} y fuera del portafolio</b><span class="muted">${otros.length}</span></summary><div class="tbl"><table><thead><tr><th>Producto (nombre de mercado)</th><th class="num">Stock c/prom.</th><th class="num">Venta 4 sem.</th><th class="num">Stock cadena</th><th></th></tr></thead><tbody>${otrosRows}</tbody></table></div></details>` : ''}
+  </section>`;
+}
+function excCell(k, y){
+  const ex = Object.entries(y.cuentas || {});
+  const chips = ex.map(([id, e]) => `<span class="exc"><b>${esc(cname(id))}</b>${RO() ? ` ${esc(e.estado)}` : `<select data-exc="${esc(k)}|${id}" aria-label="${esc(cname(id))} para ${esc(k)}">${['Mide','No mide'].map(s => `<option ${e.estado===s?'selected':''}>${s}</option>`).join('')}</select><button class="link danger" data-del-exc="${esc(k)}|${id}" aria-label="Quitar excepción">×</button>`}</span>`).join('');
+  const used = new Set(ex.map(([id]) => id));
+  const opts = S.base.cuentas.filter(c => !used.has(String(c.id))).map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+  return `<div class="chips">${chips || (RO() ? '<span class="muted">regla nacional</span>' : '')}${RO() || !opts ? '' : `<select data-add-exc="${esc(k)}" aria-label="Agregar excepción por cuenta para ${esc(k)}"><option value="">+ cuenta…</option>${opts}</select>`}</div>`;
+}
+function panelMoto(pl){
+  const b = S.base, w = S.work;
+  const keys = [...new Set([...Object.keys(b.moto), ...Object.keys(w.moto)])].sort((x, y) => ((w.moto[y]||b.moto[y]).pago||0) - ((w.moto[x]||b.moto[x]).pago||0) || x.localeCompare(y));
+  const rows = keys.map(k => {
+    const x = b.moto[k], y = w.moto[k], pv = b.moto_prev[k];
+    if (!y) return `<tr class="removed"><td>${esc(k)}</td><td colspan="${pl?5:4}">Se quita del período</td><td><button class="link" data-undo-moto="${esc(k)}">Deshacer</button></td></tr>`;
+    const ch = !same(x, y), auto = y.regla === '5pct_lista';
+    return `<tr class="${ch?'changed':''}"><td><b>${esc(k)}</b></td>
+      <td class="num"><input type="number" step="990" min="0" data-moto="${esc(k)}" data-f="precio" value="${y.precio ?? ''}" placeholder="pendiente" aria-label="Precio de lista ${esc(k)}" ${RO()?'disabled':''}></td>
+      <td><select data-moto="${esc(k)}" data-f="regla" aria-label="Regla ${esc(k)}" ${RO()?'disabled':''}><option value="5pct_lista" ${auto?'selected':''}>5% de lista</option><option value="manual" ${!auto?'selected':''}>Manual</option></select></td>
+      <td class="num">${auto ? `<b>${fCLP(y.pago)}</b>` : `<input type="number" step="500" min="0" data-moto="${esc(k)}" data-f="pago" value="${y.pago ?? ''}" aria-label="Pago ${esc(k)}" ${RO()?'disabled':''}>`}</td>
+      <td><input data-moto="${esc(k)}" data-f="nota" value="${esc(y.nota)}" class="w-l" aria-label="Nota ${esc(k)}" ${RO()?'disabled':''}></td>
+      ${pl ? `<td class="num prev">${pv ? fCLP(pv.pago) : 'nuevo'}</td>` : ''}<td>${RO() ? '' : `<button class="link danger" data-del-moto="${esc(k)}" aria-label="Quitar ${esc(k)}">Quitar</button>`}</td></tr>`;
+  }).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Motothings</h2><span class="muted">Pago lineal por unidad, sin gate y sin techo; no modifican la meta</span></div>
+    <p class="hint">Con la regla <b>5% de lista</b> el pago se calcula solo (precio de lista más alto en canales oficiales, redondeado a $500). <b>Manual</b> sirve mientras falta el precio.</p>
+    <div class="tbl"><table><thead><tr><th>Accesorio</th><th class="num">Precio de lista</th><th>Regla</th><th class="num">Pago por unidad</th><th>Nota</th>${pl?`<th class="num">${esc(pl)}</th>`:''}<th></th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="empty">Sin accesorios.</td></tr>`}</tbody></table></div>
+    ${RO() ? '' : `<div class="addrow"><div class="f"><label class="lbl" for="n-acc">Accesorio</label><input id="n-acc" placeholder="Moto Buds 3"></div><div class="f"><label class="lbl" for="n-precio">Precio de lista</label><input id="n-precio" type="number" step="990" min="0"></div><button id="b-add-moto">Agregar accesorio</button></div>`}</section>`;
+}
+
+// ----- Construcción de la meta -----
+function viewMeta(){
+  const b = S.base, w = S.work, pl = prevLbl();
+  if (!w.pmeta) { w.pmeta = {semanas:null, gfk:null, share_def:0.2, piso_desempeno:true, evento:'', alza_medio:0, alza_medio_extra:0, alza_alto:0, min_sig:0, f_fuera:0.5, por_stock:true, notas:''}; }
+  const bp = b.pmeta || {}, wp = w.pmeta, pp = b.pmeta_prev;
+  const F = (k, lbl, kind, extra, opts) => fieldHtml(wp, pp, k, lbl, kind, extra, Object.assign({prefix:'m', ch: !same(bp[k], wp[k])}, opts || {}));
+  const per = S.periodos.find(p => perKey(p) === perKey(S.periodo));
+  return `<section class="panel"><div class="panel-head"><h2>Reglas de construcción de la meta</h2><span class="muted">${per ? esc(per.inicio) + ' → ' + esc(per.fin) : ''}</span></div>
+    <div class="formula">Meta total = TAM semanal × semanas × factor GfK × share objetivo  →  reparto Base / Medio / Alto por stock de la tienda  →  ajustes</div>
+    <div class="formula">Share objetivo = max( min( max(mín cuenta, histórico + margen, objetivo anterior), máx cuenta ), histórico si piso de desempeño )</div>
+    <div class="grid-params">
+      ${F('semanas','Semanas del ciclo','int','',{unit:'sem'})}
+      ${F('gfk','Factor GfK','num','Venta/día del mes objetivo ÷ venta/día ponderada de los meses base. Octubre fue 1,52.')}
+      ${F('share_def','Share objetivo por defecto','pct','Cuando la cuenta no tiene mínimo propio.')}
+      ${F('piso_desempeno','Piso de desempeño','bool','El techo de la cuenta nunca baja la meta por debajo del ritmo real de la tienda.')}
+      ${F('evento','Evento comercial','txt1','Cyber, Black Friday… vacío si no hay.',{ph:'Black Friday'})}
+      ${F('alza_medio','Alza Medio por evento','pct')}
+      ${F('alza_medio_extra','Alza adicional Medio si stock ≥ meta','pct')}
+      ${F('alza_alto','Alza Alto por evento','pct')}
+      ${F('min_sig','Mínimo Alto con stock Signature','int','Unidades; 1 por semana en Octubre.',{unit:'u'})}
+      ${F('f_fuera','Factor stock fuera de meta','num','El tramo baja este factor × % que pesa en el stock el modelo que no mide. 0,5 = la mitad.')}
+      ${F('por_stock','Reparto por stock de la tienda','bool','No: usa el reparto fijo por cuenta de más abajo.')}
+      ${F('notas','Notas','txt')}
+    </div>
+    <p class="hint"><b>Qué aplica hoy el motor de TRADE</b> al generar: TAM proyectado, share con rango y piso de desempeño, piso de 100 u fijo full time, factor 0,5 ruta, ajustes manuales, reparto fijo por cuenta. <b>Lo que todavía corre fuera</b> (scripts de Touch): reparto por stock, evento, mínimo Signature, mínimos KAM, productividad y stock fuera de meta. Los parámetros se declaran aquí igual, para que ambos lean lo mismo.</p>
+  </section>
+  ${panelRango()}${panelReglas()}${panelSTC()}`;
+}
+function panelRango(){
+  const b = S.base, w = S.work;
+  const rows = b.cuentas.map(c => { const id = String(c.id), x = b.rango[id], y = w.rango[id] || {min:null, max:null, motivo:''};
+    const xv = x && (x.min!=null||x.max!=null||x.motivo) ? {min:x.min, max:x.max, motivo:x.motivo} : null, yv = (y.min!=null||y.max!=null||y.motivo) ? y : null, ch = !same(xv, yv);
+    return `<tr class="${ch?'changed':''}"><td><b>${esc(c.nombre)}</b></td>
+      <td class="num"><input type="number" step="0.5" min="0" max="100" class="w-s" data-rango="${id}" data-f="min" value="${toPctInput(y.min)}" placeholder="def." aria-label="Share mínimo ${esc(c.nombre)}" ${RO()?'disabled':''}></td>
+      <td class="num"><input type="number" step="0.5" min="0" max="100" class="w-s" data-rango="${id}" data-f="max" value="${toPctInput(y.max)}" placeholder="sin techo" aria-label="Share máximo ${esc(c.nombre)}" ${RO()?'disabled':''}></td>
+      <td><input data-rango="${id}" data-f="motivo" class="w-l" value="${esc(y.motivo)}" aria-label="Motivo ${esc(c.nombre)}" ${RO()?'disabled':''}></td>
+      <td>${x ? (x.propio ? '<span class="pill ok">propio del período</span>' : `<span class="pill">heredado de ${esc(x.desde)}</span>`) : '<span class="muted">por defecto</span>'}</td></tr>`; }).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Rango de share por cuenta</h2><span class="muted">Mínimo y máximo del share objetivo; el piso de desempeño va por encima del máximo</span></div>
+    <div class="tbl"><table><thead><tr><th>Cuenta</th><th class="num">Mínimo %</th><th class="num">Máximo %</th><th>Motivo</th><th>Vigencia</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+function panelReglas(){
+  const b = S.base, w = S.work;
+  const rows = b.cuentas.map(c => { const id = String(c.id), x = reglaVacia(b.regla[id]) ? null : b.regla[id], y = w.regla[id] || EMPTY_REGLA(); const ch = !same(x, reglaVacia(y) ? null : y);
+    const inp = (f, w_, ph) => `<input type="number" step="0.5" min="0" class="${w_||'w-s'}" data-regla="${id}" data-f="${f}" value="${y[f] ?? ''}" placeholder="${ph||''}" aria-label="${f} ${esc(c.nombre)}" ${RO()?'disabled':''}>`;
+    return `<tr class="${ch?'changed':''}"><td><b>${esc(c.nombre)}</b></td>
+      <td class="num">${inp('prod','w-s','—')}</td><td class="num"><input type="number" step="0.5" min="0" max="100" class="w-s" data-regla="${id}" data-f="tope" value="${toPctInput(y.tope)}" placeholder="—" aria-label="Tope share ${esc(c.nombre)}" ${RO()?'disabled':''}></td>
+      <td class="num">${inp('min_b')}</td><td class="num">${inp('min_m')}</td><td class="num">${inp('min_a')}</td><td class="num">${inp('max_a')}</td><td class="num">${inp('sig')}</td>
+      <td><input type="checkbox" data-regla="${id}" data-f="por_venta" ${y.por_venta?'checked':''} aria-label="Reparto por venta ${esc(c.nombre)}" ${RO()?'disabled':''}></td>
+      <td><input data-regla="${id}" data-f="motivo" class="w-l" value="${esc(y.motivo)}" aria-label="Motivo ${esc(c.nombre)}" ${RO()?'disabled':''}></td></tr>`; }).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Reglas por cuenta</h2><span class="muted">Mínimos KAM, productividad y Signature; vacío = no aplica</span></div>
+    <p class="hint"><b>Productividad</b>: unidades/día por FTE como piso de la meta, con tope de share (Movistar 8 u/día, tope 32%). <b>Mínimos y tope KAM</b>: por tienda y tramo, en unidades. <b>Signature sin stock</b>: mínimo de Alto aunque no haya stock (Ripley 1, kiosko digital). <b>Reparto por venta</b>: mezcla de venta de 6 semanas en vez de stock (Ripley, Entel).</p>
+    <div class="tbl"><table><thead><tr><th>Cuenta</th><th class="num">Prod. u/día</th><th class="num">Tope share %</th><th class="num">Mín Base</th><th class="num">Mín Medio</th><th class="num">Mín Alto</th><th class="num">Máx Alto</th><th class="num">Signature s/stock</th><th>Por venta</th><th>Motivo</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+function panelSTC(){
+  const b = S.base, w = S.work;
+  const rows = b.cuentas.map(c => { const id = String(c.id), x = b.stc[id], y = w.stc[id];
+    if (!y) return `<tr><td>${esc(c.nombre)}</td><td colspan="4" class="muted">Sin reparto fijo</td><td>${RO() ? '' : `<button class="link" data-add-stc="${id}">Cargar</button>`}</td></tr>`;
+    const ch = !same(x ? {b:x.b, m:x.m, a:x.a} : null, y), sum = (y.b||0)+(y.m||0)+(y.a||0), bad = Math.abs(sum - 1) > 0.0005;
+    return `<tr class="${ch?'changed':''}"><td><b>${esc(c.nombre)}</b></td>${['b','m','a'].map(f => `<td class="num"><input type="number" step="0.5" min="0" max="100" class="w-s" data-stc="${id}" data-f="${f}" value="${toPctInput(y[f])}" aria-label="${esc(c.nombre)} ${f}" ${RO()?'disabled':''}></td>`).join('')}<td class="num">${bad ? `<span class="pill bad">${fP(sum)}</span>` : fP(sum)}</td><td>${x ? (x.propio ? '<span class="pill ok">propio</span>' : `<span class="pill">heredado de ${esc(x.desde)}</span>`) : '<span class="pill acc">nuevo</span>'}</td></tr>`; }).join('');
+  return `<details class="group"><summary><b>Reparto fijo por cuenta</b><span class="muted">Lo usa el motor de TRADE cuando no hay reparto por stock (share_tramo_cuenta)</span></summary><div class="tbl"><table><thead><tr><th>Cuenta</th><th class="num">Base %</th><th class="num">Medio %</th><th class="num">Alto %</th><th class="num">Suma</th><th>Vigencia</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+}
+
+// ----- Variable -----
+function viewVariable(){
+  const b = S.base.params, w = S.work.params, pv = S.base.params_prev;
+  const F = (k, lbl, kind, extra, opts) => fieldHtml(w, pv, k, lbl, kind, extra, Object.assign({prefix:'v', ch: !same(b[k], w[k])}, opts || {}));
+  const sp = Object.entries(S.work.tramos).filter(([k, t]) => t && t.sp).map(([k, t]) => `${k} ${fCLP(t.pago)}`).join(' · ');
+  return `<section class="panel"><div class="panel-head"><h2>Reglas del variable</h2><span class="muted">${prevLbl() ? 'Comparado con ' + esc(prevLbl()) : ''}</span></div>
+    <div class="formula">Variable = Gate × (Pool Medio + Pool Alto) + Super Premium + Motothings</div>
+    <div class="grid-params">
+      ${F('gate','Gate de volumen','pct','Cumplimiento del volumen total (todo lo que mide). Bajo esto el pool paga $0.')}
+      ${F('peso_medio','Peso tramo Medio','pct','Alto se ajusta solo para sumar 100%. Tienda sin meta Alto: 100% a Medio, y viceversa.')}
+      ${F('peso_alto','Peso tramo Alto','pct','',{disabled:true})}
+      ${F('piso','Piso por tramo','pct','Bajo el piso el tramo paga $0; desde el piso, 1:1.')}
+      ${F('techo','Techo por tramo','pct','',{max:300})}
+      ${F('umbral90','Regla del 90%','pct','Medio paga sobre 100% solo si Alto llega aquí. Alto sobrecumple siempre.')}
+      ${F('masivo_x','Masivos: máximo diario por modelo y tienda','int','Sobre esto se presume masivo y no se paga.',{unit:'u/día'})}
+      ${F('masivo_desc','Masivos descuentan del cumplimiento','bool','',{nullable:true})}
+      ${F('estado','Estado de los supuestos','sel','Confirmado = listo para comunicar a la agencia.',{options:[['borrador','Borrador'],['confirmado','Confirmado']]})}
+      ${F('notas','Notas del período','txt')}
+    </div>
+    <p class="hint">El pool nominal de cada promotor es el monto al 100% de su categoría y no se configura aquí. <b>Super Premium</b> se marca en el Portafolio: ${sp ? esc(sp) : 'ninguno'}.</p>
+    ${ejemploPool()}</section>`;
+}
+function ejemploPool(){
+  const w = S.work.params; if (!w) return '';
+  const pool = 300000, pm = pool * (w.peso_medio ?? .5), pa = pool * (w.peso_alto ?? .5);
+  const pagoTramo = (c, base, puedeSobre) => { if (c < (w.piso ?? .75)) return 0; const tope = puedeSobre ? Math.min(c, w.techo ?? 1.2) : Math.min(c, 1); return base * tope; };
+  const casos = [[0.8,1.15],[1.1,0.95],[1.1,0.85],[0.6,1.1]].map(([m,a]) => { const alto = pagoTramo(a, pa, true); const medio = pagoTramo(m, pm, a >= (w.umbral90 ?? .9)); return {m, a, medio, alto, tot: medio + alto}; });
+  return `<details class="group"><summary><b>Prueba de reglas</b><span class="muted">Casos A–D del documento con pool de $300.000 y gate cumplido, calculados con el borrador</span></summary><div class="tbl"><table><thead><tr><th class="num">Medio</th><th class="num">Alto</th><th class="num">Pago Medio</th><th class="num">Pago Alto</th><th class="num">Pool</th></tr></thead><tbody>${casos.map(c => `<tr><td class="num">${fP(c.m)}</td><td class="num">${fP(c.a)}</td><td class="num">${fCLP(c.medio)}</td><td class="num">${fCLP(c.alto)}</td><td class="num"><b>${fCLP(c.tot)}</b></td></tr>`).join('')}</tbody></table></div></details>`;
+}
+
+// ----- Metas -----
+function viewMetas(){
+  const M = S.metas; if (!M) return '<div class="empty">Cargando metas…</div>'; if (M.error) return `<div class="banner bad"><p>${esc(M.error)}</p></div>`;
+  const filas = M.filas, conMeta = filas.filter(f => N(f.meta_total) != null), conCob = filas.filter(f => f.n_cob > 0);
+  const tot = (k, arr) => arr.reduce((s, f) => s + (N(f[k]) || 0), 0);
+  const metodos = [...new Set(conMeta.map(f => f.metodo_meta))], estados = [...new Set(conMeta.map(f => f.estado))];
+  const comp = S.compPeriodo, totComp = tot('meta_comp', filas);
+  const compOpts = (S.base.metas_periodos || []).filter(m => !(m.anio === S.periodo.anio && m.nombre === S.periodo.nombre)).map(m => `<option value="${esc(m.anio+'|'+m.nombre)}" ${comp && comp.anio===m.anio && comp.nombre===m.nombre ? 'selected' : ''}>${esc(m.nombre+' '+m.anio)} · ${m.n} filas · ${esc(m.metodos)}</option>`).join('');
+  const byC = {}; for (const f of filas) { const c = byC[f.cuenta] = byC[f.cuenta] || {t:0, meta:0, b:0, m:0, a:0, comp:0, sinMeta:0, piso:0}; c.t++; c.meta += N(f.meta_total)||0; c.b += N(f.meta_base)||0; c.m += N(f.meta_medio)||0; c.a += N(f.meta_alto)||0; c.comp += N(f.meta_comp)||0; if (N(f.meta_total)==null && f.n_cob>0) c.sinMeta++; if (f.share_rango_aplicado==='piso_desempeno') c.piso++; }
+  const dCell = (a, b) => { const d = b ? a / b - 1 : null; if (d == null || !a) return '<td class="num muted">—</td>'; return `<td class="num"><span class="${Math.abs(d) >= 0.25 ? 'pill warn' : ''}">${d>0?'+':''}${nf1.format(d*100)}%</span></td>`; };
+  const resumen = Object.entries(byC).map(([c, v]) => `<tr><td><b>${esc(c)}</b></td><td class="num">${v.t}</td><td class="num">${fN(v.meta)}</td><td class="num">${fN(v.b)}</td><td class="num">${fN(v.m)}</td><td class="num">${fN(v.a)}</td><td class="num">${v.meta ? fP(v.a / v.meta) : '—'}</td><td class="num">${comp ? fN(v.comp) : '—'}</td>${comp ? dCell(v.meta, v.comp) : '<td class="num muted">—</td>'}<td><div class="chips">${v.sinMeta ? `<span class="pill bad">${v.sinMeta} sin meta</span>` : ''}${v.piso ? `<span class="pill acc">${v.piso} piso desempeño</span>` : ''}</div></td></tr>`).join('');
+  const fc = S.metasFiltro.cuenta, q = S.metasFiltro.q.toLowerCase();
+  const det = filas.filter(f => (!fc || f.cuenta === fc) && (!q || (f.tienda + ' ' + f.id_local + ' ' + (f.promotores||'')).toLowerCase().includes(q)));
+  const chips = (f) => { const c = []; if (f.n_cob === 0) c.push('<span class="pill bad">sin cobertura</span>'); if (N(f.meta_total) == null && f.n_cob > 0) c.push('<span class="pill bad">sin meta</span>'); if (f.piso_aplicado) c.push('<span class="pill">piso cobertura</span>'); if (f.override_manual) c.push('<span class="pill acc">meta manual</span>'); if (f.share_rango_aplicado) c.push(`<span class="pill acc">${esc(f.share_rango_aplicado.replace('_',' '))}</span>`); if (f.metodo_meta === 'importada_base_touch') c.push('<span class="pill">importada</span>'); else if (f.metodo_meta && f.metodo_meta !== 'tam_share') c.push(`<span class="pill warn">${f.metodo_meta === 'repetida_mes_anterior' ? 'repite meta anterior' : 'repite venta'}</span>`); if (f.tipo_distribucion === 'sin_alto') c.push('<span class="pill">sin Alto</span>'); return c.join(' '); };
+  const detRows = det.map(f => `<tr><td>${esc(f.cuenta)}</td><td><b>${esc(f.tienda)}</b><br><span class="muted" style="font-size:12.5px">${esc(f.id_local)} · ${esc(f.promotores || 'sin promotor vigente')}</span></td><td class="num">${fN(f.tam)}</td><td class="num">${fP(f.share_hist)}</td><td class="num">${fP(f.share_obj)}</td><td class="num"><b>${fN(f.meta_total)}</b></td><td class="num">${fN(f.meta_base)}</td><td class="num">${fN(f.meta_medio)}</td><td class="num">${fN(f.meta_alto)}</td><td class="num">${comp ? fN(f.meta_comp) : '—'}</td>${comp ? dCell(N(f.meta_total)||0, N(f.meta_comp)) : '<td class="num muted">—</td>'}<td><div class="chips">${chips(f)}</div></td></tr>`).join('');
+  const cuentas = [...new Set(filas.map(f => f.cuenta))];
+  const prev = S.importPrev;
+  return `<section class="panel"><div class="panel-head"><h2>Metas de ${esc(perLbl(S.periodo))}</h2><div class="ctrl"><label class="lbl" for="sel-comp">Comparar con</label><select id="sel-comp"><option value="">Sin comparación</option>${compOpts}</select></div></div>
+    <div class="statgrid"><div class="stat"><b>${conCob.length}</b><span>tiendas con cobertura vigente</span></div><div class="stat"><b>${conMeta.length}</b><span>con meta ${metodos.length ? '· ' + esc(metodos.map(m => m === 'importada_base_touch' ? 'importada' : m).join(', ')) : ''}${estados.length ? ' · ' + esc(estados.join(', ')) : ''}</span></div><div class="stat"><b>${fN(tot('meta_total', filas))}</b><span>unidades de meta total</span></div><div class="stat"><b>${comp ? fN(totComp) : '—'}</b><span>${comp ? 'meta de ' + esc(perLbl(comp)) + ' en esas tiendas' : 'sin comparación'}</span></div></div>
+    ${!conMeta.length ? `<div class="banner warn"><p>${esc(perLbl(S.periodo))} todavía no tiene metas en TRADE. Importa la Base de trabajo de Touch o genera con el motor de TRADE.</p></div>` : ''}
+    ${S.importAviso ? `<div class="banner warn"><p>${esc(S.importAviso)}</p></div>` : ''}
+  </section>
+  ${RO() ? '' : `<section class="panel"><div class="panel-head"><h2>Cargar metas</h2></div>
+    <div class="two">
+      <div class="box"><h3>Importar Base de trabajo (Touch)</h3><p class="hint">Sube el .xlsx de la Base de trabajo. Se lee la hoja <b>Base Tiendas</b> (código, TAM, meta y tramos) y solo las filas con promotor (incluye "Walmart con promotor"). Las metas quedan en TRADE como importadas, en borrador.</p>
+        <input type="file" id="f-xlsx" accept=".xlsx,.xlsm">
+        ${prev ? `<div class="banner acc"><p>${prev.filas.length} tiendas leídas de la hoja ${esc(prev.hoja)} · ${esc(fN(prev.filas.reduce((s,f)=>s+(f.meta||0),0)))} u${prev.error ? '' : ''}</p><button class="primary" id="b-import">Revisar e importar</button></div>` : ''}${S.importError ? `<div class="banner bad"><p>${esc(S.importError)}</p></div>` : ''}</div>
+      <div class="box"><h3>Generar con el motor de TRADE</h3><p class="hint">Calcula desde TAM, share y cobertura con las reglas que el motor ya aplica. Útil para comparar contra la base importada; para Noviembre la fuente es la Base de Touch.</p>
+        <div class="ctrl"><label class="lbl" for="in-margen">Margen</label><input type="number" id="in-margen" step="0.5" min="0" max="20" value="${toPctInput(S.margen)}" style="width:80px"><span class="muted">pp</span><button id="b-generar">Generar</button><button id="b-confirmar" ${conMeta.length?'':'disabled'}>Confirmar metas</button></div></div>
+    </div></section>`}
+  ${panelOverrides()}
+  <section class="panel"><div class="panel-head"><h2>Resumen por cuenta</h2><span class="muted">${comp ? 'Δ contra ' + esc(perLbl(comp)) + '; marcado sobre ±25%' : ''}</span></div>
+    <div class="tbl"><table><thead><tr><th>Cuenta</th><th class="num">Tiendas</th><th class="num">Meta total</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">% Alto</th><th class="num">${comp ? esc(perLbl(comp)) : 'Comp.'}</th><th class="num">Δ</th><th></th></tr></thead><tbody>${resumen || '<tr><td colspan="10" class="empty">Sin tiendas.</td></tr>'}</tbody></table></div></section>
+  <section class="panel"><div class="panel-head"><h2>Detalle por tienda</h2><div class="ctrl"><label class="lbl" for="f-cuenta">Cuenta</label><select id="f-cuenta"><option value="">Todas</option>${cuentas.map(c => `<option ${c===fc?'selected':''}>${esc(c)}</option>`).join('')}</select><input id="f-q" placeholder="Buscar tienda, código o promotor" value="${esc(S.metasFiltro.q)}"></div></div>
+    <p class="hint">Una fila por tienda. Dos promotores en una tienda responden cada uno contra la meta completa. Medio y Alto pagan el pool; Base solo suma al Gate.</p>
+    <div class="tbl tall"><table><thead><tr><th>Cuenta</th><th>Tienda y promotores</th><th class="num">TAM</th><th class="num">Share hist.</th><th class="num">Share obj.</th><th class="num">Meta</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">${comp ? esc(comp.nombre) : 'Comp.'}</th><th class="num">Δ</th><th>Notas</th></tr></thead><tbody>${detRows || '<tr><td colspan="12" class="empty">Sin resultados.</td></tr>'}</tbody></table></div></section>`;
+}
+function panelOverrides(){
+  const b = S.base, w = S.work, filas = S.metas.filas, tn = (id) => (filas.find(f => String(f.tienda_id) === String(id)) || {});
+  const rows = [];
+  for (const [k, lbl] of [['ovr_meta','Meta total'],['ovr_tam','TAM']]) for (const id of new Set([...Object.keys(b[k]||{}), ...Object.keys(w[k]||{})])) { const x = (b[k]||{})[id], y = (w[k]||{})[id], f = tn(id);
+    if (!y) { rows.push(`<tr class="removed"><td>${esc(f.cuenta||'')}</td><td>${esc(f.tienda||id)}</td><td>${lbl}</td><td colspan="2">Se quita</td><td><button class="link" data-undo-ovr="${k}|${id}">Deshacer</button></td></tr>`); continue; }
+    rows.push(`<tr class="${!same(x, y)?'changed':''}"><td>${esc(f.cuenta||'')}</td><td><b>${esc(f.tienda||id)}</b></td><td>${lbl}</td><td class="num"><input type="number" min="0" step="1" data-ovr="${k}|${id}" data-f="valor" value="${y.valor ?? ''}" aria-label="Valor" ${RO()?'disabled':''}></td><td><input data-ovr="${k}|${id}" data-f="motivo" class="w-l" value="${esc(y.motivo)}" aria-label="Motivo" ${RO()?'disabled':''}></td><td>${RO() ? '' : `<button class="link danger" data-del-ovr="${k}|${id}">Quitar</button>`}</td></tr>`); }
+  const opts = filas.filter(f => f.n_cob > 0).map(f => `<option value="${f.tienda_id}">${esc(f.cuenta + ' · ' + f.tienda)}</option>`).join('');
+  return `<details class="group" ${rows.length?'open':''}><summary><b>Ajustes manuales</b><span class="muted">Overrides con motivo para el motor de TRADE; entran al volver a generar</span></summary><div>
+    <div class="tbl"><table><thead><tr><th>Cuenta</th><th>Tienda</th><th>Tipo</th><th class="num">Valor (u)</th><th>Motivo</th><th></th></tr></thead><tbody>${rows.join('') || `<tr><td colspan="6" class="muted">Sin ajustes manuales.</td></tr>`}</tbody></table></div>
+    ${RO() ? '' : `<div class="addrow"><div class="f"><label class="lbl" for="n-ovr-t">Tienda</label><select id="n-ovr-t"><option value="">Elige tienda…</option>${opts}</select></div><div class="f"><label class="lbl" for="n-ovr-k">Tipo</label><select id="n-ovr-k"><option value="ovr_meta">Meta total</option><option value="ovr_tam">TAM</option></select></div><div class="f"><label class="lbl" for="n-ovr-v">Valor (u)</label><input id="n-ovr-v" type="number" min="0" step="1" style="width:100px"></div><div class="f"><label class="lbl" for="n-ovr-m">Motivo</label><input id="n-ovr-m" class="w-l"></div><button id="b-add-ovr">Agregar ajuste</button></div>`}</div></details>`;
+}
+
+// ----- Checklist -----
+function viewCheck(){
+  const C = S.check; if (!C) return '<div class="empty">Cargando checklist…</div>'; if (C.error) return `<div class="banner bad"><p>${esc(C.error)}</p></div>`;
+  const b = S.base, items = [], add = (sev, cat, det) => items.push({sev, cat, det});
+  if (b.params.estado !== 'confirmado') add('warning','Supuestos','Los supuestos siguen en borrador.');
+  if (b.params.masivo_x == null) add('warning','Masivos','Falta definir el máximo diario de unidades antes de presumir masivo (X).');
+  if (b.params.masivo_desc == null) add('warning','Masivos','Falta definir si los masivos descuentan del cumplimiento.');
+  if (!b.pmeta) add('error','Construcción de la meta','No hay reglas de construcción de la meta para el período.');
+  else { if (b.pmeta.semanas == null) add('error','Construcción de la meta','Faltan las semanas del ciclo.'); if (b.pmeta.gfk == null) add('error','Construcción de la meta','Falta el factor GfK del mes.'); if (b.pmeta.evento && !(b.pmeta.alza_medio || b.pmeta.alza_alto)) add('warning','Construcción de la meta',`Hay evento (${b.pmeta.evento}) pero las alzas están en 0.`); }
+  for (const [k, m] of Object.entries(b.moto)) if (m.precio == null) add('info','Motothings', `${k}: precio de lista pendiente; se paga ${fCLP(m.pago)} manual.`);
+  const difs = Object.entries(b.tramos).filter(([k, t]) => b.master[k] && b.master[k].tramo !== t.tramo);
+  if (difs.length) add('info','Portafolio', `${difs.length} modelo(s) con tramo distinto al master: ${difs.map(([k,t]) => k + ' (' + TRAMO_LBL[b.master[k].tramo] + ' → ' + TRAMO_LBL[t.tramo] + ')').join(', ')}.`);
+  const noMaster = Object.keys(b.tramos).filter(k => !b.master[k]); if (noMaster.length) add('info','Portafolio', `${noMaster.join(', ')} no está(n) en el master de TRADE.`);
+  for (const r of C.sin_clasificar || []) add('warning','Modelos sin clasificar', `${r.market_name}: ${fN(r.venta_4s)} u vendidas en 4 semanas y ${fN(r.stock_ult)} en stock, sin tramo ni Motothings en el período.`);
+  for (const [key, r] of Object.entries(b.stock || {})) { const [cid, modelo] = key.split('|'); const t = b.tramos[modelo]; if (!t || N(r.prom) == null || r.prom < 20 || estadoEn(t, cid)) continue; add('info','Stock fuera de meta', `${cname(cid)} · ${modelo}: ${fN(r.prom)} u en ${r.tiendas} tiendas con promotor (${fW((b.semanas[cid]||{}).semana)}), y el modelo no mide ahí. Entra al ajuste por stock fuera de meta.`); }
+  for (const [cid, s] of Object.entries(b.semanas || {})) { if (!b.cuentas.some(c => String(c.id) === cid)) continue; if (s.ultima && s.semana && s.ultima > s.semana) add('info','Semana de stock', `${cname(cid)}: se usa ${fW(s.semana)}; la última cargada (${fW(s.ultima)}) se ve parcial.`); }
+  const nAccSinCargo = b.headcount['(sin categoría)'] || 0; if (nAccSinCargo) add('warning','Promotores', `${nAccSinCargo} promotores vigentes sin categoría (cargo_bono) en su ficha.`);
+  const n = changes().length; if (n && !RO()) add('warning','Borrador', `${n} cambio(s) sin aplicar en esta página.`);
+  const sevOrder = {error:0, warning:1, info:2};
+  const off = (C.oficial || []).map(r => ({sev: r.severidad, cat: r.categoria.replace(/_/g,' '), det: `${r.cuenta_nombre ? r.cuenta_nombre + ' · ' : ''}${r.tienda_nombre ? r.tienda_nombre + ': ' : ''}${r.detalle}`}));
+  const all = [...items, ...off].sort((x, y) => (sevOrder[x.sev] ?? 3) - (sevOrder[y.sev] ?? 3));
+  const cnt = (s) => all.filter(i => i.sev === s).length, groups = {}; for (const i of all) (groups[i.sev + '|' + i.cat] = groups[i.sev + '|' + i.cat] || []).push(i);
+  const pc = (s) => s === 'error' ? 'bad' : s === 'warning' ? 'warn' : 'acc';
+  const body = Object.entries(groups).map(([k, arr]) => { const [sev, cat] = k.split('|'); return `<details class="group" ${sev==='error'&&arr.length<=12?'open':''}><summary><span class="pill ${pc(sev)}">${sev === 'error' ? 'Error' : sev === 'warning' ? 'Aviso' : 'Info'}</span><b>${esc(cat)}</b><span class="muted">${arr.length}</span></summary><div><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px">${arr.slice(0, 200).map(i => `<li>${esc(i.det)}</li>`).join('')}${arr.length > 200 ? `<li class="muted">y ${arr.length - 200} más</li>` : ''}</ul></div></details>`; }).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Checklist pre-entrega · ${esc(perLbl(S.periodo))}</h2>${RO() ? '' : '<button id="b-recheck">Volver a revisar</button>'}</div>
+    <div class="statgrid"><div class="stat"><b>${cnt('error')}</b><span>errores que bloquean la entrega</span></div><div class="stat"><b>${cnt('warning')}</b><span>avisos para revisar</span></div><div class="stat"><b>${cnt('info')}</b><span>informativos</span></div></div>
+    <p class="hint">Junta <span class="kbd">checklist_pre_entrega</span> de TRADE con las validaciones de los supuestos. "Modelos sin clasificar" mira la última semana con dato${C.semana_ref ? ' (' + esc(String(C.semana_ref).slice(0,4) + ' W' + String(C.semana_ref).slice(4)) + ')' : ''}.</p>
+    ${body || '<div class="empty">Todo en orden.</div>'}</section>`;
+}
+function viewLog(){
+  const L = (S.check && S.check.log) || [], fmt = (v) => v == null ? '—' : typeof v === 'object' ? Object.entries(v).map(([k, x]) => `${k}: ${x == null ? '—' : typeof x === 'object' ? JSON.stringify(x) : x}`).join(' · ') : String(v);
+  return `<section class="panel"><div class="panel-head"><h2>Bitácora de ${esc(perLbl(S.periodo))}</h2><span class="muted">Cada escritura hecha desde esta página, con su motivo</span></div>
+    <div class="tbl"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Tabla</th><th>Clave</th><th>Antes</th><th>Después</th><th>Motivo</th></tr></thead><tbody>${L.map(l => `<tr><td class="num">${esc(new Date(l.aplicado_en).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'}))}</td><td>${esc(l.usuario || '—')}</td><td>${esc(l.tabla)}</td><td>${esc(l.clave)}</td><td class="muted">${esc(fmt(l.antes))}</td><td>${esc(fmt(l.despues))}</td><td>${esc(l.motivo || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Sin registros todavía.</td></tr>'}</tbody></table></div></section>`;
+}
+
+// ---------- eventos ----------
+function changed(){ saveDraft(); renderHeader(); renderMain(); }
+function readFld(el, kind){ return kind === 'pct' ? fromPctInput(el.value) : kind === 'int' ? (el.value === '' ? null : Math.round(+el.value)) : kind === 'num' ? (el.value === '' ? null : +el.value) : kind === 'bool' ? (el.value === '' ? null : el.value === 'true') : el.value; }
+function bind(tab){
+  const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
+  if (tab === 'portafolio') {
+    const ft = $('#f-tramo'); if (ft) ft.onchange = (e) => { S.tramoFiltro = e.target.value; renderMain(); };
+    const vp = $('#v-port'); if (vp) vp.onchange = (e) => { S.vistaPort = e.target.value; renderMain(); };
+    const cc = $('#c-cat'); if (cc) cc.onchange = (e) => { S.cuentaCat = e.target.value; renderMain(); };
+    on('[data-cat]', 'change', (e) => { const k = e.target.dataset.cat, cid = String(S.cuentaCat), t = S.work.tramos[k]; t.cuentas = t.cuentas || {}; if (e.target.value === 'nacional') delete t.cuentas[cid]; else t.cuentas[cid] = {estado: e.target.value, motivo: ''}; changed(); });
+    on('[data-add-otro]', 'click', (e) => { const mn = e.target.dataset.addOtro; const nombre = mn.replace(/^motorola\s+|^moto\s+/i, '').replace(/\b5g\b/i, '').trim().replace(/\b\w/g, c => c.toUpperCase()); if (S.work.tramos[nombre]) { toast('Ya está en el portafolio'); return; } S.work.tramos[nombre] = {match: mn, tramo: 1, sp: false, pago: null, vigencia: 'Vigente', mide: true, cuentas: {}}; toast(`${nombre} agregado como Base; ajusta el tramo en la vista Nacional`); changed(); });
+    on('[data-tramo]', 'change', (e) => { const el = e.target, t = S.work.tramos[el.dataset.tramo], f = el.dataset.f;
+      if (f === 'tramo') { t.tramo = +el.value; if (t.tramo !== 3) { t.sp = false; t.pago = null; } } else if (f === 'sp') { t.sp = el.checked; t.pago = t.sp ? (t.pago ?? 20000) : null; } else if (f === 'pago') t.pago = el.value === '' ? null : +el.value; else if (f === 'mide') t.mide = el.checked; else t[f] = el.value; changed(); });
+    on('[data-semana]', 'change', (e) => { const id = e.target.dataset.semana, v = +e.target.value, s = S.base.semanas[id]; if (v === s.sugerida && !s.fuente) delete S.work.semana[id]; else S.work.semana[id] = v; changed(); });
+    on('[data-cell]', 'click', (e) => { const [k, cid] = e.currentTarget.dataset.cell.split('|'); const t = S.work.tramos[k]; t.cuentas = t.cuentas || {}; if (t.cuentas[cid]) delete t.cuentas[cid]; else t.cuentas[cid] = {estado: t.mide ? 'No mide' : 'Mide', motivo: ''}; changed(); });
+    on('[data-add-exc]', 'change', (e) => { const k = e.target.dataset.addExc, id = e.target.value; if (!id) return; const t = S.work.tramos[k]; t.cuentas = t.cuentas || {}; t.cuentas[id] = {estado: t.mide ? 'No mide' : 'Mide', motivo: ''}; changed(); });
+    on('[data-exc]', 'change', (e) => { const [k, id] = e.target.dataset.exc.split('|'); S.work.tramos[k].cuentas[id].estado = e.target.value; changed(); });
+    on('[data-del-exc]', 'click', (e) => { const [k, id] = e.target.dataset.delExc.split('|'); delete S.work.tramos[k].cuentas[id]; changed(); });
+    on('[data-del-tramo]', 'click', (e) => { const k = e.target.dataset.delTramo; if (S.base.tramos[k]) S.work.tramos[k] = null; else delete S.work.tramos[k]; changed(); });
+    on('[data-undo-tramo]', 'click', (e) => { const k = e.target.dataset.undoTramo; S.work.tramos[k] = clone(S.base.tramos[k]); changed(); });
+    const bat = $('#b-add-tramo'); if (bat) bat.onclick = () => { const m = $('#n-modelo').value.trim(), mt = $('#n-match').value.trim(), t = +$('#n-tramo').value; if (!m || !mt) { toast('Escribe el modelo y su nombre de mercado'); return; } if (S.work.tramos[m]) { toast('Ese modelo ya está'); return; } S.work.tramos[m] = {match: mt, tramo: t, sp: false, pago: null, vigencia: 'Vigente', mide: true, cuentas: {}}; changed(); };
+    on('[data-moto]', 'change', (e) => { const el = e.target, m = S.work.moto[el.dataset.moto], f = el.dataset.f; if (f === 'precio') m.precio = el.value === '' ? null : +el.value; else if (f === 'pago') m.pago = el.value === '' ? null : +el.value; else m[f] = el.value; if (m.regla === '5pct_lista') { if (m.precio == null) { m.regla = 'manual'; toast('Sin precio de lista el pago queda manual'); } else m.pago = pago5(m.precio); } changed(); });
+    on('[data-del-moto]', 'click', (e) => { const k = e.target.dataset.delMoto; if (S.base.moto[k]) S.work.moto[k] = null; else delete S.work.moto[k]; changed(); });
+    on('[data-undo-moto]', 'click', (e) => { const k = e.target.dataset.undoMoto; S.work.moto[k] = clone(S.base.moto[k]); changed(); });
+    const bam = $('#b-add-moto'); if (bam) bam.onclick = () => { const a = $('#n-acc').value.trim(), p = $('#n-precio').value; if (!a) { toast('Escribe el nombre del accesorio'); return; } if (S.work.moto[a]) { toast('Ese accesorio ya está'); return; } const precio = p === '' ? null : +p; S.work.moto[a] = {precio, pago: precio == null ? 0 : pago5(precio), regla: precio == null ? 'manual' : '5pct_lista', nota: precio == null ? 'precio pendiente' : ''}; changed(); };
+  }
+  if (tab === 'meta') {
+    on('[id^="m-"][data-fld]', 'change', (e) => { const el = e.target; S.work.pmeta[el.dataset.fld] = readFld(el, el.dataset.kind); changed(); });
+    on('[data-rango]', 'change', (e) => { const el = e.target, id = el.dataset.rango; const r = S.work.rango[id] = S.work.rango[id] || {min:null, max:null, motivo:''}; if (el.dataset.f === 'motivo') r.motivo = el.value; else r[el.dataset.f] = fromPctInput(el.value); changed(); });
+    on('[data-regla]', 'change', (e) => { const el = e.target, id = el.dataset.regla, f = el.dataset.f; const r = S.work.regla[id] = S.work.regla[id] || EMPTY_REGLA(); if (f === 'motivo') r.motivo = el.value; else if (f === 'por_venta') r.por_venta = el.checked; else if (f === 'tope') r.tope = fromPctInput(el.value); else r[f] = el.value === '' ? null : +el.value; changed(); });
+    on('[data-stc]', 'change', (e) => { const el = e.target; S.work.stc[el.dataset.stc][el.dataset.f] = fromPctInput(el.value) ?? 0; changed(); });
+    on('[data-add-stc]', 'click', (e) => { S.work.stc[e.target.dataset.addStc] = {b:.5, m:.4, a:.1}; changed(); });
+  }
+  if (tab === 'variable') on('[id^="v-"][data-fld]', 'change', (e) => { const el = e.target, k = el.dataset.fld, w = S.work.params; w[k] = readFld(el, el.dataset.kind); if (k === 'peso_medio' && w.peso_medio != null) w.peso_alto = +(1 - w.peso_medio).toFixed(6); changed(); });
+  if (tab === 'metas') {
+    const sc = $('#sel-comp'); if (sc) sc.onchange = async (e) => { const v = e.target.value; S.compPeriodo = v ? {anio: +v.split('|')[0], nombre: v.split('|')[1]} : null; if (S.mode === 'live') { S.busy = true; renderHeader(); await loadMetas(); S.busy = false; } render(); };
+    const fcu = $('#f-cuenta'); if (fcu) fcu.onchange = (e) => { S.metasFiltro.cuenta = e.target.value; renderMain(); };
+    const fq = $('#f-q'); if (fq) fq.onchange = (e) => { S.metasFiltro.q = e.target.value; renderMain(); };
+    const im = $('#in-margen'); if (im) im.onchange = (e) => { S.margen = fromPctInput(e.target.value) || 0; };
+    const bg = $('#b-generar'); if (bg) bg.onclick = actGenerar; const bcf = $('#b-confirmar'); if (bcf) bcf.onclick = actConfirmarMetas;
+    const fx = $('#f-xlsx'); if (fx) fx.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; S.importError = null; S.importAviso = null; try { if (typeof XLSX === 'undefined') throw new Error('La librería de Excel no cargó; recarga la página.'); S.importPrev = await readBase(f); if (!S.importPrev.filas.length) throw new Error('No encontré filas con promotor en la hoja.'); } catch(err) { S.importPrev = null; S.importError = err.message || String(err); } renderMain(); };
+    const bi = $('#b-import'); if (bi) bi.onclick = () => actImportar(S.importPrev);
+    on('[data-ovr]', 'change', (e) => { const [k, id] = e.target.dataset.ovr.split('|'); const o = S.work[k][id]; if (e.target.dataset.f === 'valor') o.valor = e.target.value === '' ? null : +e.target.value; else o.motivo = e.target.value; changed(); });
+    on('[data-del-ovr]', 'click', (e) => { const [k, id] = e.target.dataset.delOvr.split('|'); if ((S.base[k]||{})[id]) S.work[k][id] = null; else delete S.work[k][id]; changed(); });
+    on('[data-undo-ovr]', 'click', (e) => { const [k, id] = e.target.dataset.undoOvr.split('|'); S.work[k][id] = clone(S.base[k][id]); changed(); });
+    const bao = $('#b-add-ovr'); if (bao) bao.onclick = () => { const t = $('#n-ovr-t').value, k = $('#n-ovr-k').value, v = $('#n-ovr-v').value, m = $('#n-ovr-m').value.trim(); if (!t || v === '' || !m) { toast('Elige tienda, valor y motivo'); return; } S.work[k][t] = {valor: +v, motivo: m}; changed(); };
+  }
+  if (tab === 'checklist') { const br = $('#b-recheck'); if (br) br.onclick = async () => { S.busy = true; renderHeader(); await loadCheck(); S.busy = false; render(); }; }
+}
+$('#sel-periodo').addEventListener('change', (e) => { const [a, n] = e.target.value.split('|'); S.periodo = {anio: +a, nombre: n}; store('periodo', S.periodo); S.compPeriodo = null; S.metas = null; S.check = null; S.importPrev = null; S.importAviso = null; loadAll(true); });
+window.addEventListener('hashchange', () => { renderTabs(); renderMain(); });
+
+function renderLogin(){
+  $('#main').innerHTML = `<form class="login" id="f-login"><h1>Metas y Variable Chile</h1><p class="hint" style="margin:0">Acceso para Motorola Chile y Touch. Entra con el correo y la contraseña que te asignaron.</p>
+    <div class="f" style="display:flex;flex-direction:column;gap:4px"><label class="lbl" for="l-email">Correo</label><input id="l-email" type="email" autocomplete="username" required></div>
+    <div class="f" style="display:flex;flex-direction:column;gap:4px"><label class="lbl" for="l-pass">Contraseña</label><input id="l-pass" type="password" autocomplete="current-password" required></div>
+    <div id="l-err" hidden class="banner bad"><p></p></div>
+    <button class="primary" type="submit" id="l-ok">Entrar</button></form>`;
+  $('#f-login').onsubmit = async (e) => { e.preventDefault(); $('#l-ok').disabled = true; $('#l-ok').textContent = 'Entrando…';
+    try { const { error } = await sb.auth.signInWithPassword({email: $('#l-email').value.trim(), password: $('#l-pass').value}); if (error) throw error; await afterLogin(); }
+    catch(err) { const b = $('#l-err'); b.hidden = false; b.querySelector('p').textContent = errMsg(err); $('#l-ok').disabled = false; $('#l-ok').textContent = 'Entrar'; } };
+}
+async function logout(){ try { await sb.auth.signOut(); } catch(e) {} S.yo = null; S.base = null; S.mode = 'login'; render(); }
+async function afterLogin(){
+  S.mode = 'loading'; render();
+  try { S.yo = await rpc('app_yo'); } catch(e) { S.yo = null; }
+  if (!S.yo) { await sb.auth.signOut().catch(() => {}); S.mode = 'login'; render(); const b = $('#l-err'); if (b) { b.hidden = false; b.querySelector('p').textContent = 'Tu usuario existe pero no tiene acceso a esta aplicación. Pide a Motorola que lo habilite.'; } return; }
+  await loadAll(true);
+}
+async function boot(){
+  renderTabs();
+  S.periodo = store('periodo') || {anio: 2026, nombre: 'Noviembre'};
+  const { data } = await sb.auth.getSession();
+  if (data && data.session) await afterLogin(); else { S.mode = 'login'; render(); }
+  sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT' && S.mode !== 'login') { S.yo = null; S.mode = 'login'; render(); } });
+}
+boot();
+})();
+</script>
+</body></html>
