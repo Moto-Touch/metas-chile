@@ -212,7 +212,7 @@ function errMsg(e){
 }
 // ---------- carga ----------
 function pickParams(r){ return {gate:N(r.gate_volumen_pct), peso_medio:N(r.peso_medio), peso_alto:N(r.peso_alto), piso:N(r.piso_tramo_pct), techo:N(r.techo_tramo_pct), umbral90:N(r.regla90_umbral), masivo_x: r.masivo_max_diario == null ? null : +r.masivo_max_diario, masivo_desc: r.masivo_descuenta_cumplimiento, estado: r.estado, notas: r.notas || ''}; }
-function pickPMeta(r){ return {semanas: r.semanas == null ? null : +r.semanas, gfk:N(r.factor_gfk), share_def:N(r.share_objetivo_default), piso_desempeno: !!r.piso_desempeno, evento: r.evento_nombre || '', alza_medio:N(r.alza_medio_pct), alza_medio_extra:N(r.alza_medio_extra_pct), alza_alto:N(r.alza_alto_pct), min_sig: r.min_signature_alto == null ? 0 : +r.min_signature_alto, f_fuera:N(r.factor_stock_fuera_meta), por_stock: !!r.reparto_por_stock, notas: r.notas || ''}; }
+function pickPMeta(r){ return {semanas: r.semanas == null ? null : +r.semanas, gfk:N(r.factor_gfk), share_def:N(r.share_objetivo_default), share_sp:N(r.share_sin_promotor), share_sp_alto:N(r.share_sin_promotor_tam_alto), umbral_sp: r.umbral_tam_sin_promotor == null ? null : +r.umbral_tam_sin_promotor, piso_desempeno: !!r.piso_desempeno, evento: r.evento_nombre || '', alza_medio:N(r.alza_medio_pct), alza_medio_extra:N(r.alza_medio_extra_pct), alza_alto:N(r.alza_alto_pct), min_sig: r.min_signature_alto == null ? 0 : +r.min_signature_alto, f_fuera:N(r.factor_stock_fuera_meta), por_stock: !!r.reparto_por_stock, notas: r.notas || ''}; }
 function pickTramo(r){ return {match: r.market_name_match, tramo: +r.tramo, sp: !!r.es_super_premium, pago: N(r.pago_unidad_sp), vigencia: r.vigencia, mide: r.mide !== false, cuentas: {}}; }
 function pickMoto(r){ return {precio: N(r.precio_lista), pago: N(r.pago_unidad), regla: r.regla, nota: r.nota || '', match: r.market_name_match || '', vigencia: r.vigencia || 'Vigente', mide: r.mide !== false, cuentas: {}}; }
 function pickRegla(r){ return {prod:N(r.piso_productividad_dia), tope:N(r.tope_share_piso), min_b:N(r.min_base), min_m:N(r.min_medio), min_a:N(r.min_alto), max_a:N(r.max_alto), sig:r.min_signature_sin_stock == null ? null : +r.min_signature_sin_stock, por_venta: !!r.reparto_por_venta, motivo: r.motivo || ''}; }
@@ -371,22 +371,39 @@ function actConfirmarMetas(){
 }
 
 // ---------- importación de la Base de trabajo ----------
-const COLS = {codigo:['código tienda','codigo tienda'], tipo:['tipo oct','tipo nov','tipo dic','tipo'], tam:['tam oct proyectado','tam nov proyectado','tam dic proyectado','tam proyectado'], meta:['meta oct','meta nov','meta dic','meta total'], base:['meta base'], medio:['meta medio'], alto:['meta alta','meta alto'], share:['share esperado'], cadena:['cadena'], tienda:['tienda']};
+const COLS = {codigo:['código tienda','codigo tienda'], tipo:['tipo nov','tipo dic','tipo ene','tipo feb','tipo mar','tipo abr','tipo may','tipo jun','tipo jul','tipo ago','tipo sep','tipo oct','tipo'], tam:['tam nov proyectado','tam dic proyectado','tam ene proyectado','tam feb proyectado','tam mar proyectado','tam abr proyectado','tam may proyectado','tam jun proyectado','tam jul proyectado','tam ago proyectado','tam sep proyectado','tam oct proyectado','tam proyectado'], meta:['meta nov','meta dic','meta ene','meta feb','meta mar','meta abr','meta may','meta jun','meta jul','meta ago','meta sep','meta oct','meta total'], base:['meta base'], medio:['meta medio'], alto:['meta alta','meta alto'], share:['share esperado'], cadena:['cadena'], tienda:['tienda'], supervisor:['supervisor'], zona:['zona'], merchandiser:['merchandiser'], ingram:['ingram (encargado)','ingram'], cluster:['cluster']};
+const TIPO_LBL = {con_promotor:'Con promotor', supervisor:'Sin promotor · supervisor', otras:'Otras (merchandiser / INGRAM)'};
+const PER_MES = {Enero:'ene',Febrero:'feb',Marzo:'mar',Abril:'abr',Mayo:'may',Junio:'jun',Julio:'jul',Agosto:'ago',Septiembre:'sep',Octubre:'oct',Noviembre:'nov',Diciembre:'dic'};
 function readBase(file){
+  const mes = PER_MES[S.periodo.nombre] || '';
+  const pick = (hdr, names) => { const pri = names.filter(n => mes && n.includes(' ' + mes)); for (const n of [...pri, ...names]) { const j = hdr.findIndex(h => h === n); if (j >= 0) return j; } const pref = names[0].replace(/ (ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b.*/,''); return hdr.findIndex(h => h.startsWith(pref)); };
+  const leerHoja = (wb, name, tipoFijo) => {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:null});
+    const hi = rows.findIndex(r => r && r.some(c => typeof c === 'string' && c.toLowerCase().trim() === 'código tienda'));
+    if (hi < 0) throw new Error('No encontré la fila de encabezados con "Código tienda" en la hoja ' + name);
+    const hdr = rows[hi].map(c => String(c ?? '').toLowerCase().trim());
+    const idx = {}; for (const [k, names] of Object.entries(COLS)) idx[k] = pick(hdr, names);
+    const falt = ['codigo','meta','base','medio','alto'].filter(k => idx[k] < 0); if (falt.length) throw new Error(`Hoja ${name}: faltan columnas ${falt.join(', ')}`);
+    const g = (r, k) => idx[k] >= 0 ? r[idx[k]] : null;
+    const out = [];
+    for (const r of rows.slice(hi + 1)) { if (!r || !r[idx.codigo]) continue;
+      const t = String(g(r, 'tipo') ?? '').toLowerCase();
+      const tipo = tipoFijo || (t.includes('con promotor') ? 'con_promotor' : t.includes('sin promotor') ? 'supervisor' : t ? 'supervisor' : 'con_promotor');
+      out.push({codigo:String(r[idx.codigo]).trim(), tipo, cadena: g(r,'cadena'), tienda: g(r,'tienda'), tam: N(g(r,'tam')), meta: N(g(r,'meta')), base: N(g(r,'base')), medio: N(g(r,'medio')), alto: N(g(r,'alto')), share: N(g(r,'share')),
+        supervisor: g(r,'supervisor'), zona: g(r,'zona'), merchandiser: g(r,'merchandiser'), ingram: g(r,'ingram'), cluster: g(r,'cluster')}); }
+    return out;
+  };
   return new Promise((res, rej) => {
     const fr = new FileReader();
     fr.onload = () => { try {
       const wb = XLSX.read(fr.result, {type:'array'});
-      const name = wb.SheetNames.find(n => n.toLowerCase().trim() === 'base tiendas') || wb.SheetNames[0];
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:null});
-      let hi = rows.findIndex(r => r && r.some(c => typeof c === 'string' && c.toLowerCase().trim() === 'código tienda'));
-      if (hi < 0) throw new Error('No encontré la fila de encabezados con "Código tienda" en la hoja ' + name);
-      const hdr = rows[hi].map(c => String(c ?? '').toLowerCase().trim());
-      const idx = {}; for (const [k, names] of Object.entries(COLS)) { let j = -1; for (const n of names) { j = hdr.findIndex(h => h === n); if (j >= 0) break; } if (j < 0) { const pref = names[0].replace(/ (oct|nov|dic)\b.*/,''); j = hdr.findIndex(h => h.startsWith(pref)); } idx[k] = j; }
-      const falt = ['codigo','meta','base','medio','alto'].filter(k => idx[k] < 0); if (falt.length) throw new Error('Faltan columnas: ' + falt.join(', '));
-      const out = [];
-      for (const r of rows.slice(hi + 1)) { if (!r || !r[idx.codigo]) continue; const tipo = idx.tipo >= 0 ? String(r[idx.tipo] ?? '').toLowerCase() : ''; if (tipo && !tipo.includes('con promotor')) continue; out.push({codigo:String(r[idx.codigo]).trim(), cadena: idx.cadena>=0 ? r[idx.cadena] : null, tienda: idx.tienda>=0 ? r[idx.tienda] : null, tam: idx.tam>=0 ? N(r[idx.tam]) : null, meta: N(r[idx.meta]), base: N(r[idx.base]), medio: N(r[idx.medio]), alto: N(r[idx.alto]), share: idx.share>=0 ? N(r[idx.share]) : null}); }
-      res({hoja: name, filas: out, conTipo: idx.tipo >= 0});
+      const base = wb.SheetNames.find(n => n.toLowerCase().trim() === 'base tiendas'), otras = wb.SheetNames.find(n => n.toLowerCase().trim() === 'otras tiendas');
+      if (!base) throw new Error('El archivo no tiene la hoja "Base Tiendas"');
+      let filas = leerHoja(wb, base, null);
+      const vistos = new Set(filas.map(f => f.codigo));
+      if (otras) for (const f of leerHoja(wb, otras, 'otras')) if (!vistos.has(f.codigo)) { filas.push(f); vistos.add(f.codigo); }
+      const porTipo = {}; for (const f of filas) { const p = porTipo[f.tipo] = porTipo[f.tipo] || {n:0, u:0}; p.n++; p.u += f.meta || 0; }
+      res({hoja: base + (otras ? ' + ' + otras : ''), filas, porTipo});
     } catch(e) { rej(e); } };
     fr.onerror = () => rej(new Error('No se pudo leer el archivo'));
     fr.readAsArrayBuffer(file);
@@ -394,7 +411,8 @@ function readBase(file){
 }
 function actImportar(prev){
   const tot = prev.filas.reduce((s, f) => s + (f.meta || 0), 0);
-  openModal({title:`Importar ${prev.filas.length} tiendas a ${perLbl(S.periodo)}`, intro:`Hoja <b>${esc(prev.hoja)}</b>${prev.conTipo ? ', solo filas con promotor' : ''}: ${esc(fN(tot))} unidades de meta. Las tiendas se cruzan por código (id_local, con variantes Movistar/Hites). Las metas quedan en TRADE como <b>importada_base_touch</b>, en borrador; si vuelves a generar en TRADE, se reemplazan.`, needMotivo: true, confirmLbl:'Importar',
+  const desglose = Object.entries(prev.porTipo || {}).map(([t, p]) => `${TIPO_LBL[t] || t}: ${p.n} tiendas · ${fN(p.u)} u`).join(' · ');
+  openModal({title:`Importar ${prev.filas.length} tiendas a ${perLbl(S.periodo)}`, intro:`Hojas <b>${esc(prev.hoja)}</b>: ${esc(fN(tot))} unidades de meta. ${esc(desglose)}. Las tiendas se cruzan por código (id_local, con variantes Movistar/Hites). Cada meta queda marcada por tipo (con promotor / supervisor / otras) y se guarda la asignación de supervisor, zona y merchandiser del período. Las metas quedan en TRADE como <b>importada_base_touch</b>, en borrador; las importadas antes del mismo tipo que ya no vengan en el archivo se quitan.`, needMotivo: true, confirmLbl:'Importar',
     onConfirm: async (motivo) => { const r = await rpc('app_importar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_filas: prev.filas, p_motivo: motivo}); toast(r ? `Importadas ${r.importadas}; sin tienda ${r.sin_tienda}; sin cobertura ${r.sin_cobertura}` : 'Importación hecha'); S.importPrev = null; if (r && r.sin_tienda) S.importAviso = `Códigos sin tienda en TRADE: ${r.codigos_sin_match}`; await Promise.all([loadMetas(), loadCheck()]); render(); }});
 }
 
@@ -601,7 +619,7 @@ function panelMotoCuenta(cid){
 // ----- Construcción de la meta -----
 function viewMeta(){
   const b = S.base, w = S.work, pl = prevLbl();
-  if (!w.pmeta) { w.pmeta = {semanas:null, gfk:null, share_def:0.2, piso_desempeno:true, evento:'', alza_medio:0, alza_medio_extra:0, alza_alto:0, min_sig:0, f_fuera:0.5, por_stock:true, notas:''}; }
+  if (!w.pmeta) { w.pmeta = {semanas:null, gfk:null, share_def:0.2, share_sp:0.1, share_sp_alto:0.08, umbral_sp:null, piso_desempeno:true, evento:'', alza_medio:0, alza_medio_extra:0, alza_alto:0, min_sig:0, f_fuera:0.5, por_stock:true, notas:''}; }
   const bp = b.pmeta || {}, wp = w.pmeta, pp = b.pmeta_prev;
   const F = (k, lbl, kind, extra, opts) => fieldHtml(wp, pp, k, lbl, kind, extra, Object.assign({prefix:'m', ch: !same(bp[k], wp[k])}, opts || {}));
   const per = S.periodos.find(p => perKey(p) === perKey(S.periodo));
@@ -617,6 +635,9 @@ function viewMeta(){
       ${F('gfk','Factor GfK','num','Venta/día del mes objetivo ÷ venta/día ponderada de los meses base. Octubre fue 1,52.')}
       ${F('share_def','Share objetivo por defecto','pct','Cuando la cuenta no tiene mínimo propio.')}
       ${F('piso_desempeno','Piso de desempeño','bool','El techo de la cuenta nunca baja la meta por debajo del ritmo real de la tienda.')}
+      ${F('share_sp','Share sin promotor','pct','Tiendas de supervisor y otras: % del TAM cuando no hay promotor.')}
+      ${F('share_sp_alto','Share sin promotor · TAM alto','pct','Se usa en vez del anterior cuando el TAM proyectado supera el umbral.')}
+      ${F('umbral_sp','Umbral TAM para share alto','int','Oct: 950 u en 5 sem; Nov: 760 u en 4 sem. Vacío = siempre el share normal.',{unit:'u'})}
       ${F('evento','Evento comercial','txt1','Cyber, Black Friday… vacío si no hay.',{ph:'Black Friday'})}
       ${F('alza_medio','Alza Medio por evento','pct')}
       ${F('alza_medio_extra','Alza adicional Medio si stock ≥ meta','pct')}
@@ -697,7 +718,10 @@ function ejemploPool(){
 // ----- Metas -----
 function viewMetas(){
   const M = S.metas; if (!M) return '<div class="empty">Cargando metas…</div>'; if (M.error) return `<div class="banner bad"><p>${esc(M.error)}</p></div>`;
-  const filas = M.filas, conMeta = filas.filter(f => N(f.meta_total) != null), conCob = filas.filter(f => f.n_cob > 0);
+  const ft = S.metasFiltro.tipo || 'con_promotor';
+  const todas = M.filas, filas = ft === 'todas' ? todas : todas.filter(f => (f.tipo || 'con_promotor') === ft);
+  const conMeta = filas.filter(f => N(f.meta_total) != null), conCob = filas.filter(f => f.n_cob > 0);
+  const nTipo = {}; for (const f of todas) { const t = f.tipo || 'con_promotor'; nTipo[t] = nTipo[t] || {n:0, u:0}; nTipo[t].n++; nTipo[t].u += N(f.meta_total) || 0; }
   const tot = (k, arr) => arr.reduce((s, f) => s + (N(f[k]) || 0), 0);
   const metodos = [...new Set(conMeta.map(f => f.metodo_meta))], estados = [...new Set(conMeta.map(f => f.estado))];
   const comp = S.compPeriodo, totComp = tot('meta_comp', filas);
@@ -706,29 +730,34 @@ function viewMetas(){
   const dCell = (a, b) => { const d = b ? a / b - 1 : null; if (d == null || !a) return '<td class="num muted">—</td>'; return `<td class="num"><span class="${Math.abs(d) >= 0.25 ? 'pill warn' : ''}">${d>0?'+':''}${nf1.format(d*100)}%</span></td>`; };
   const resumen = Object.entries(byC).map(([c, v]) => `<tr><td><b>${esc(c)}</b></td><td class="num">${v.t}</td><td class="num">${fN(v.meta)}</td><td class="num">${fN(v.b)}</td><td class="num">${fN(v.m)}</td><td class="num">${fN(v.a)}</td><td class="num">${v.meta ? fP(v.a / v.meta) : '—'}</td><td class="num">${comp ? fN(v.comp) : '—'}</td>${comp ? dCell(v.meta, v.comp) : '<td class="num muted">—</td>'}<td><div class="chips">${v.sinMeta ? `<span class="pill bad">${v.sinMeta} sin meta</span>` : ''}${v.piso ? `<span class="pill acc">${v.piso} piso desempeño</span>` : ''}</div></td></tr>`).join('');
   const fc = S.metasFiltro.cuenta, q = S.metasFiltro.q.toLowerCase();
-  const det = filas.filter(f => (!fc || f.cuenta === fc) && (!q || (f.tienda + ' ' + f.id_local + ' ' + (f.promotores||'')).toLowerCase().includes(q)));
-  const chips = (f) => { const c = []; if (f.n_cob === 0) c.push('<span class="pill bad">sin cobertura</span>'); if (N(f.meta_total) == null && f.n_cob > 0) c.push('<span class="pill bad">sin meta</span>'); if (f.piso_aplicado) c.push('<span class="pill">piso cobertura</span>'); if (f.override_manual) c.push('<span class="pill acc">meta manual</span>'); if (f.share_rango_aplicado) c.push(`<span class="pill acc">${esc(f.share_rango_aplicado.replace('_',' '))}</span>`); if (f.metodo_meta === 'importada_base_touch') c.push('<span class="pill">importada</span>'); else if (f.metodo_meta && f.metodo_meta !== 'tam_share') c.push(`<span class="pill warn">${f.metodo_meta === 'repetida_mes_anterior' ? 'repite meta anterior' : 'repite venta'}</span>`); if (f.tipo_distribucion === 'sin_alto') c.push('<span class="pill">sin Alto</span>'); return c.join(' '); };
-  const detRows = det.map(f => `<tr><td>${esc(f.cuenta)}</td><td><b>${esc(f.tienda)}</b><br><span class="muted" style="font-size:12.5px">${esc(f.id_local)} · ${esc(f.promotores || 'sin promotor vigente')}</span></td><td class="num">${fN(f.tam)}</td><td class="num">${fP(f.share_hist)}</td><td class="num">${fP(f.share_obj)}</td><td class="num"><b>${fN(f.meta_total)}</b></td><td class="num">${fN(f.meta_base)}</td><td class="num">${fN(f.meta_medio)}</td><td class="num">${fN(f.meta_alto)}</td><td class="num">${comp ? fN(f.meta_comp) : '—'}</td>${comp ? dCell(N(f.meta_total)||0, N(f.meta_comp)) : '<td class="num muted">—</td>'}<td><div class="chips">${chips(f)}</div></td></tr>`).join('');
+  const det = filas.filter(f => (!fc || f.cuenta === fc) && (!q || (f.tienda + ' ' + f.id_local + ' ' + (f.promotores||'') + ' ' + (f.supervisor||'') + ' ' + (f.merchandiser||'')).toLowerCase().includes(q)));
+  const bySup = {}; for (const f of todas) { if ((f.tipo||'con_promotor') === 'otras') continue; const k = f.supervisor || '(sin supervisor)'; const s = bySup[k] = bySup[k] || {zona: f.zona, cp:0, mcp:0, sp:0, msp:0}; if ((f.tipo||'con_promotor') === 'con_promotor') { s.cp++; s.mcp += N(f.meta_total)||0; } else { s.sp++; s.msp += N(f.meta_total)||0; } }
+  const supRows = Object.entries(bySup).sort((a, b) => a[0].localeCompare(b[0])).map(([k, s]) => `<tr><td><b>${esc(k)}</b></td><td>${esc(s.zona || '')}</td><td class="num">${s.cp}</td><td class="num">${fN(s.mcp)}</td><td class="num">${s.sp}</td><td class="num">${fN(s.msp)}</td><td class="num"><b>${fN(s.mcp + s.msp)}</b></td></tr>`).join('');
+  const chips = (f) => { const c = []; const tp = f.tipo || 'con_promotor'; if (tp === 'con_promotor' && f.n_cob === 0) c.push('<span class="pill bad">sin cobertura</span>'); if (tp !== 'con_promotor' && f.n_cob > 0) c.push('<span class="pill warn">tiene promotor en TRADE</span>'); if (tp === 'supervisor') c.push(`<span class="pill">${esc(f.supervisor || 'supervisor')}</span>`); if (tp === 'otras') c.push(`<span class="pill">${esc(f.ingram ? 'INGRAM ' + f.ingram : f.merchandiser || 'merchandiser')}</span>`); if (N(f.meta_total) == null && f.n_cob > 0) c.push('<span class="pill bad">sin meta</span>'); if (f.piso_aplicado) c.push('<span class="pill">piso cobertura</span>'); if (f.override_manual) c.push('<span class="pill acc">meta manual</span>'); if (f.share_rango_aplicado) c.push(`<span class="pill acc">${esc(f.share_rango_aplicado.replace('_',' '))}</span>`); if (f.metodo_meta === 'importada_base_touch') c.push('<span class="pill">importada</span>'); else if (f.metodo_meta && f.metodo_meta !== 'tam_share') c.push(`<span class="pill warn">${f.metodo_meta === 'repetida_mes_anterior' ? 'repite meta anterior' : 'repite venta'}</span>`); if (f.tipo_distribucion === 'sin_alto') c.push('<span class="pill">sin Alto</span>'); return c.join(' '); };
+  const detRows = det.map(f => `<tr><td>${esc(f.cuenta)}</td><td><b>${esc(f.tienda)}</b><br><span class="muted" style="font-size:12.5px">${esc(f.id_local)} · ${esc(f.promotores || ((f.tipo||'con_promotor') === 'con_promotor' ? 'sin promotor vigente' : f.tipo === 'supervisor' ? 'sin promotor · ' + (f.supervisor || 'supervisor') : (f.merchandiser || 'merchandiser') + (f.ingram ? ' · INGRAM ' + f.ingram : '')))}</span></td><td class="num">${fN(f.tam)}</td><td class="num">${fP(f.share_hist)}</td><td class="num">${fP(f.share_obj)}</td><td class="num"><b>${fN(f.meta_total)}</b></td><td class="num">${fN(f.meta_base)}</td><td class="num">${fN(f.meta_medio)}</td><td class="num">${fN(f.meta_alto)}</td><td class="num">${comp ? fN(f.meta_comp) : '—'}</td>${comp ? dCell(N(f.meta_total)||0, N(f.meta_comp)) : '<td class="num muted">—</td>'}<td><div class="chips">${chips(f)}</div></td></tr>`).join('');
   const cuentas = [...new Set(filas.map(f => f.cuenta))];
   const prev = S.importPrev;
-  return `<section class="panel"><div class="panel-head"><h2>Metas de ${esc(perLbl(S.periodo))}</h2><div class="ctrl"><label class="lbl" for="sel-comp">Comparar con</label><select id="sel-comp"><option value="">Sin comparación</option>${compOpts}</select></div></div>
-    <div class="statgrid"><div class="stat"><b>${conCob.length}</b><span>tiendas con cobertura vigente</span></div><div class="stat"><b>${conMeta.length}</b><span>con meta ${metodos.length ? '· ' + esc(metodos.map(m => m === 'importada_base_touch' ? 'importada' : m).join(', ')) : ''}${estados.length ? ' · ' + esc(estados.join(', ')) : ''}</span></div><div class="stat"><b>${fN(tot('meta_total', filas))}</b><span>unidades de meta total</span></div><div class="stat"><b>${comp ? fN(totComp) : '—'}</b><span>${comp ? 'meta de ' + esc(perLbl(comp)) + ' en esas tiendas' : 'sin comparación'}</span></div></div>
+  const tipoSel = `<label class="lbl" for="f-tipo">Tiendas</label><select id="f-tipo">${['con_promotor','supervisor','otras','todas'].map(t => `<option value="${t}" ${ft===t?'selected':''}>${t === 'todas' ? 'Todas' : TIPO_LBL[t]}${nTipo[t] ? ` (${nTipo[t].n})` : t === 'todas' ? ` (${todas.length})` : ''}</option>`).join('')}</select>`;
+  return `<section class="panel"><div class="panel-head"><h2>Metas de ${esc(perLbl(S.periodo))}</h2><div class="ctrl">${tipoSel}<label class="lbl" for="sel-comp">Comparar con</label><select id="sel-comp"><option value="">Sin comparación</option>${compOpts}</select></div></div>
+    <div class="statgrid"><div class="stat"><b>${ft === 'con_promotor' ? conCob.length : filas.length}</b><span>${ft === 'con_promotor' ? 'tiendas con cobertura vigente' : 'tiendas ' + (TIPO_LBL[ft] || 'en total').toLowerCase()}</span></div><div class="stat"><b>${conMeta.length}</b><span>con meta ${metodos.length ? '· ' + esc(metodos.map(m => m === 'importada_base_touch' ? 'importada' : m).join(', ')) : ''}${estados.length ? ' · ' + esc(estados.join(', ')) : ''}</span></div><div class="stat"><b>${fN(tot('meta_total', filas))}</b><span>unidades de meta total</span></div><div class="stat"><b>${comp ? fN(totComp) : '—'}</b><span>${comp ? 'meta de ' + esc(perLbl(comp)) + ' en esas tiendas' : 'sin comparación'}</span></div></div>
     ${!conMeta.length ? `<div class="banner warn"><p>${esc(perLbl(S.periodo))} todavía no tiene metas en TRADE. Importa la Base de trabajo de Touch o genera con el motor de TRADE.</p></div>` : ''}
     ${S.importAviso ? `<div class="banner warn"><p>${esc(S.importAviso)}</p></div>` : ''}
   </section>
   ${RO() ? '' : `<section class="panel"><div class="panel-head"><h2>Cargar metas</h2></div>
     <div class="two">
-      <div class="box"><h3>Importar Base de trabajo (Touch)</h3><p class="hint">Sube el .xlsx de la Base de trabajo. Se lee la hoja <b>Base Tiendas</b> (código, TAM, meta y tramos) y solo las filas con promotor (incluye "Walmart con promotor"). Las metas quedan en TRADE como importadas, en borrador.</p>
+      <div class="box"><h3>Importar Base de trabajo (Touch)</h3><p class="hint">Sube el .xlsx de la Base de trabajo. Se leen <b>Base Tiendas</b> (con promotor y sin promotor de supervisor) y <b>Otras tiendas</b> (merchandiser / INGRAM): código, TAM, meta, tramos y asignación. Las metas quedan en TRADE como importadas, en borrador, marcadas por tipo.</p>
         <input type="file" id="f-xlsx" accept=".xlsx,.xlsm">
-        ${prev ? `<div class="banner acc"><p>${prev.filas.length} tiendas leídas de la hoja ${esc(prev.hoja)} · ${esc(fN(prev.filas.reduce((s,f)=>s+(f.meta||0),0)))} u${prev.error ? '' : ''}</p><button class="primary" id="b-import">Revisar e importar</button></div>` : ''}${S.importError ? `<div class="banner bad"><p>${esc(S.importError)}</p></div>` : ''}</div>
+        ${prev ? `<div class="banner acc"><p>${prev.filas.length} tiendas leídas (${esc(prev.hoja)}) · ${esc(fN(prev.filas.reduce((s,f)=>s+(f.meta||0),0)))} u · ${esc(Object.entries(prev.porTipo||{}).map(([t,p]) => `${TIPO_LBL[t]||t} ${p.n}`).join(' · '))}</p><button class="primary" id="b-import">Revisar e importar</button></div>` : ''}${S.importError ? `<div class="banner bad"><p>${esc(S.importError)}</p></div>` : ''}</div>
       <div class="box"><h3>Generar con el motor de TRADE</h3><p class="hint">Calcula desde TAM, share y cobertura con las reglas que el motor ya aplica. Útil para comparar contra la base importada; para Noviembre la fuente es la Base de Touch.</p>
         <div class="ctrl"><label class="lbl" for="in-margen">Margen</label><input type="number" id="in-margen" step="0.5" min="0" max="20" value="${toPctInput(S.margen)}" style="width:80px"><span class="muted">pp</span><button id="b-generar">Generar</button><button id="b-confirmar" ${conMeta.length?'':'disabled'}>Confirmar metas</button></div></div>
     </div></section>`}
   ${panelOverrides()}
-  <section class="panel"><div class="panel-head"><h2>Resumen por cuenta</h2><span class="muted">${comp ? 'Δ contra ' + esc(perLbl(comp)) + '; marcado sobre ±25%' : ''}</span></div>
+  ${supRows ? `<section class="panel"><div class="panel-head"><h2>Meta de zona por supervisor</h2><span class="muted">Con promotor + sin promotor asignadas; "Otras tiendas" no suman</span></div>
+    <div class="tbl"><table><thead><tr><th>Supervisor</th><th>Zona</th><th class="num">Tiendas c/prom.</th><th class="num">Meta c/prom.</th><th class="num">Tiendas s/prom.</th><th class="num">Meta s/prom.</th><th class="num">Meta zona</th></tr></thead><tbody>${supRows}</tbody></table></div></section>` : ''}
+  <section class="panel"><div class="panel-head"><h2>Resumen por cuenta <span class="muted" style="font-weight:400">· ${esc(ft === 'todas' ? 'todas las tiendas' : TIPO_LBL[ft])}</span></h2><span class="muted">${comp ? 'Δ contra ' + esc(perLbl(comp)) + '; marcado sobre ±25%' : ''}</span></div>
     <div class="tbl"><table><thead><tr><th>Cuenta</th><th class="num">Tiendas</th><th class="num">Meta total</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">% Alto</th><th class="num">${comp ? esc(perLbl(comp)) : 'Comp.'}</th><th class="num">Δ</th><th></th></tr></thead><tbody>${resumen || '<tr><td colspan="10" class="empty">Sin tiendas.</td></tr>'}</tbody></table></div></section>
   <section class="panel"><div class="panel-head"><h2>Detalle por tienda</h2><div class="ctrl"><label class="lbl" for="f-cuenta">Cuenta</label><select id="f-cuenta"><option value="">Todas</option>${cuentas.map(c => `<option ${c===fc?'selected':''}>${esc(c)}</option>`).join('')}</select><input id="f-q" placeholder="Buscar tienda, código o promotor" value="${esc(S.metasFiltro.q)}"></div></div>
-    <p class="hint">Una fila por tienda. Dos promotores en una tienda responden cada uno contra la meta completa. Medio y Alto pagan el pool; Base solo suma al Gate.</p>
+    <p class="hint">${ft === 'con_promotor' ? 'Una fila por tienda. Dos promotores en una tienda responden cada uno contra la meta completa. Medio y Alto pagan el pool; Base solo suma al Gate.' : ft === 'supervisor' ? 'Tiendas sin promotor asignadas a un supervisor: su meta suma a la meta de zona. Regla: max(histórico × semanas × GfK ; share sin promotor × TAM), sin rango por cuenta ni pisos.' : ft === 'otras' ? 'Tiendas con solo merchandiser o INGRAM. Tienen meta de referencia con la regla sin promotor, pero no suman a supervisores ni al variable.' : 'Todas las tiendas con meta o asignación en el período.'}</p>
     <div class="tbl tall"><table><thead><tr><th>Cuenta</th><th>Tienda y promotores</th><th class="num">TAM</th><th class="num">Share hist.</th><th class="num">Share obj.</th><th class="num">Meta</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">${comp ? esc(comp.nombre) : 'Comp.'}</th><th class="num">Δ</th><th>Notas</th></tr></thead><tbody>${detRows || '<tr><td colspan="12" class="empty">Sin resultados.</td></tr>'}</tbody></table></div></section>`;
 }
 function panelOverrides(){
@@ -825,6 +854,7 @@ function bind(tab){
   if (tab === 'metas') {
     const sc = $('#sel-comp'); if (sc) sc.onchange = async (e) => { const v = e.target.value; S.compPeriodo = v ? {anio: +v.split('|')[0], nombre: v.split('|')[1]} : null; if (S.mode === 'live') { S.busy = true; renderHeader(); await loadMetas(); S.busy = false; } render(); };
     const fcu = $('#f-cuenta'); if (fcu) fcu.onchange = (e) => { S.metasFiltro.cuenta = e.target.value; renderMain(); };
+    const fti = $('#f-tipo'); if (fti) fti.onchange = (e) => { S.metasFiltro.tipo = e.target.value; renderMain(); };
     const fq = $('#f-q'); if (fq) fq.onchange = (e) => { S.metasFiltro.q = e.target.value; renderMain(); };
     const im = $('#in-margen'); if (im) im.onchange = (e) => { S.margen = fromPctInput(e.target.value) || 0; };
     const bg = $('#b-generar'); if (bg) bg.onclick = actGenerar; const bcf = $('#b-confirmar'); if (bcf) bcf.onclick = actConfirmarMetas;
