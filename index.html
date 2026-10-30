@@ -55,7 +55,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .draftbar{display:flex;align-items:center;gap:10px}
 nav.tabs{display:flex;gap:2px;max-width:1280px;margin:0 auto;overflow-x:auto}
 nav.tabs a{padding:9px 14px;color:var(--muted);text-decoration:none;font-weight:600;border-bottom:2px solid transparent;white-space:nowrap}
-nav.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs a.tab-adv{color:var(--muted);font-weight:400;margin-left:auto}
+.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
 main{max-width:1280px;margin:0 auto;padding-block:20px 60px;display:flex;flex-direction:column;gap:18px}
 .banner{border-radius:8px;padding:12px 14px;border:1px solid var(--line);background:var(--panel);display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
 .banner.warn{background:var(--warn-soft);border-color:transparent} .banner.bad{background:var(--bad-soft);border-color:transparent} .banner.acc{background:var(--accent-soft);border-color:transparent}
@@ -141,11 +142,11 @@ pre.sql{font-family:var(--f-mono);font-size:12px;background:var(--soft);border-r
     </div>
     <nav class="tabs" id="tabs" aria-label="Secciones">
       <a href="#portafolio">Portafolio</a>
-      <a href="#meta">Construcción de la meta</a>
       <a href="#variable">Variable</a>
       <a href="#metas">Metas</a>
       <a href="#checklist">Checklist</a>
       <a href="#bitacora">Bitácora</a>
+      <a href="#meta" class="tab-adv">Motor TRADE</a>
     </nav>
   </div>
 </header>
@@ -561,7 +562,11 @@ function viewMeta(){
   const bp = b.pmeta || {}, wp = w.pmeta, pp = b.pmeta_prev;
   const F = (k, lbl, kind, extra, opts) => fieldHtml(wp, pp, k, lbl, kind, extra, Object.assign({prefix:'m', ch: !same(bp[k], wp[k])}, opts || {}));
   const per = S.periodos.find(p => perKey(p) === perKey(S.periodo));
-  return `<section class="panel"><div class="panel-head"><h2>Reglas de construcción de la meta</h2><span class="muted">${per ? esc(per.inicio) + ' → ' + esc(per.fin) : ''}</span></div>
+  const filas = (S.metas && S.metas.filas) || [], conMeta = filas.filter(f => f.meta_total != null), nImp = conMeta.filter(f => f.metodo_meta === 'importada_base_touch').length;
+  const aviso = nImp && nImp >= conMeta.length * 0.8
+    ? `<div class="banner acc"><p><b>Este mes la meta viene importada de la Base</b> (${nImp} de ${conMeta.length} tiendas). Nada de esta hoja se usa para ${esc(perLbl(S.periodo))}: la meta total y el reparto por tramo ya llegan hechos. Estos parámetros solo aplican si en <a href="#metas">Metas</a> pides <b>Generar con TRADE</b>, por ejemplo para comparar la propuesta del motor contra la Base.</p></div>`
+    : `<div class="banner acc"><p><b>Solo aplica si la meta la genera el motor de TRADE</b> (Metas → Generar con TRADE). Qué modelos miden y en qué tramo se define en <a href="#portafolio">Portafolio</a>; aquí se define cuánto se exige.</p></div>`;
+  return aviso + `<section class="panel"><div class="panel-head"><h2>Motor TRADE · reglas de construcción de la meta</h2><span class="muted">${per ? esc(per.inicio) + ' → ' + esc(per.fin) : ''}</span></div>
     <div class="formula">Meta total = TAM semanal × semanas × factor GfK × share objetivo  →  reparto Base / Medio / Alto por stock de la tienda  →  ajustes</div>
     <div class="formula">Share objetivo = max( min( max(mín cuenta, histórico + margen, objetivo anterior), máx cuenta ), histórico si piso de desempeño )</div>
     <div class="grid-params">
