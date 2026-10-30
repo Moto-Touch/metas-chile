@@ -466,11 +466,11 @@ function viewPortafolio(){
   }).join('');
   const nMide = keys.filter(k => w.tramos[k] && w.tramos[k].mide).length, nNo = keys.filter(k => w.tramos[k] && !w.tramos[k].mide).length;
   return sw + `<section class="panel"><div class="panel-head"><h2>Portafolio de ${esc(perLbl(S.periodo))}</h2>
-      <div class="ctrl"><span class="pill ok">${nMide} miden</span><span class="pill">${nNo} no miden</span><label class="lbl" for="f-tramo">Mostrar</label><select id="f-tramo"><option value="miden" ${S.tramoFiltro==='miden'?'selected':''}>Los que miden</option><option value="nomiden" ${S.tramoFiltro==='nomiden'?'selected':''}>Los que no miden</option><option value="todos" ${S.tramoFiltro==='todos'?'selected':''}>Todos</option></select></div></div>
+      <div class="ctrl"><span class="pill ok">${nMide} miden</span><span class="pill">${nNo} no miden</span>${RO() ? '' : `<button id="b-nuevo" class="primary">+ Nuevo modelo</button>`}<label class="lbl" for="f-tramo">Mostrar</label><select id="f-tramo"><option value="miden" ${S.tramoFiltro==='miden'?'selected':''}>Los que miden</option><option value="nomiden" ${S.tramoFiltro==='nomiden'?'selected':''}>Los que no miden</option><option value="todos" ${S.tramoFiltro==='todos'?'selected':''}>Todos</option></select></div></div>
     <p class="hint">Regla nacional, en orden: <b>1</b> ciclo de vida (informativo, no cambia el cálculo) → <b>2</b> si <b>mide</b> y en qué tramo: Base solo suma al Gate; Medio y Alto suman al Gate y a su tramo. Si no mide, no cuenta para nada y su stock entra al <b>ajuste por stock fuera de meta</b> → <b>3</b> si es Super Premium y cuánto paga por unidad (solo Alto). Qué modelos <b>existen</b> en cada cuenta y las excepciones a esta regla se fijan en <b>Catálogo por cuenta</b>. <b>Master</b> es la clasificación que usa el motor de TRADE para decidir con/sin Alto; no se toca desde aquí.${nDif ? ` <span class="pill warn">${nDif} con tramo distinto al master</span>` : ''}</p>
+    ${RO() ? '' : addModeloForm()}
     <div class="tbl tall"><table><thead><tr><th>Modelo</th><th><span class="step">1</span>Ciclo de vida</th><th><span class="step">2</span>Mide</th><th><span class="step">2</span>Tramo</th><th>Excepción cuenta</th><th><span class="step">3</span>Super Premium</th><th class="num">Pago SP (CLP/u)</th><th>Master</th>${pl?`<th>${esc(pl)}</th>`:''}<th></th></tr></thead><tbody>${rows || `<tr><td colspan="10" class="empty">Sin modelos.</td></tr>`}</tbody></table></div>
-    ${RO() ? '' : `<div class="addrow"><div class="f"><label class="lbl" for="n-modelo">Modelo</label><input id="n-modelo" placeholder="Edge 70 Pro"></div><div class="f"><label class="lbl" for="n-match">Nombre de mercado (producto)</label><input id="n-match" class="w-l" placeholder="motorola edge 70 pro"></div><div class="f"><label class="lbl" for="n-tramo">Tramo</label><select id="n-tramo"><option value="1">Base</option><option value="2">Medio</option><option value="3" selected>Alto</option></select></div><button id="b-add-tramo">Agregar modelo</button></div>`}
-  </section>
+</section>
   ${panelStock()}
   ${panelMoto(pl)}`;
 }
@@ -527,6 +527,21 @@ function panelCatalogo(cid){
     <div class="tbl tall"><table><thead><tr><th>Modelo</th><th><span class="step">1</span>Existe</th><th class="num" title="Stock en tiendas con promotor">Stock</th><th class="num" title="% del stock que existe en la cuenta">%</th><th class="num" title="Tiendas con stock">Tdas.</th><th class="num" title="Venta de 4 semanas">Venta 4s</th><th class="num" title="Semanas de inventario">WOI</th><th><span class="step">2</span>Ciclo <span class="muted">nac.</span></th><th><span class="step">3</span>Mide en ${esc(nombre)}</th><th><span class="step">4</span>Tramo <span class="muted">nac.</span></th><th><span class="step">5</span>SP</th><th class="num">Pago SP</th></tr></thead><tbody>${body || '<tr><td colspan="12" class="empty">Sin modelos.</td></tr>'}</tbody></table></div>
     ${otros.length ? `<details class="group" open><summary><b>Con stock o venta en ${esc(nombre)} y fuera del portafolio nacional</b><span class="muted">${otros.length}</span></summary><div class="tbl"><table><thead><tr><th>Producto (nombre de mercado)</th><th class="num">Stock c/prom.</th><th class="num">Venta 4 sem.</th><th class="num">Stock cadena</th><th></th></tr></thead><tbody>${otrosRows}</tbody></table></div></details>` : ''}
   </section>`;
+}
+function addModeloForm(){
+  if (!S.nuevoAbierto) return '';
+  const b = S.base, usados = new Set(Object.values(S.work.tramos).filter(Boolean).map(t => (t.match||'').toLowerCase()));
+  const sug = [...new Set((b.otros || []).map(o => o.market_name))].filter(m => !usados.has(m.toLowerCase())).sort();
+  return `<div class="addrow" id="addrow" style="margin-top:12px;align-items:flex-end;flex-wrap:wrap">
+    <div class="f"><label class="lbl" for="n-modelo">Modelo</label><input id="n-modelo" placeholder="Edge 70 Pro"></div>
+    <div class="f"><label class="lbl" for="n-match">Nombre de mercado en TRADE</label><input id="n-match" class="w-l" list="dl-match" placeholder="motorola edge 70 pro"><datalist id="dl-match">${sug.map(m => `<option value="${esc(m)}">`).join('')}</datalist></div>
+    <div class="f"><label class="lbl" for="n-vig">Ciclo de vida</label><select id="n-vig"><option>Vigente</option><option>EOL</option></select></div>
+    <div class="f"><label class="lbl" for="n-mide">Mide</label><select id="n-mide"><option value="true">Mide</option><option value="false">No mide</option></select></div>
+    <div class="f"><label class="lbl" for="n-tramo">Tramo</label><select id="n-tramo"><option value="1">Base · solo Gate</option><option value="2">Medio</option><option value="3" selected>Alto</option></select></div>
+    <div class="f"><label class="lbl" for="n-sp">Super Premium</label><select id="n-sp"><option value="">No</option><option value="20000">Sí · $20.000/u</option><option value="40000">Sí · $40.000/u</option></select></div>
+    <button id="b-add-tramo" class="primary">Agregar</button><button id="b-nuevo-cerrar">Cancelar</button>
+    <p class="hint" style="flex-basis:100%;margin:0">El <b>nombre de mercado</b> es cómo TRADE llama al producto en venta e inventario; con él se cruzan stock, venta y cierre. Si el producto aún no vende, escríbelo como vendrá en el sell-out (minúsculas, p. ej. <i>motorola edge 70 pro</i>); la lista sugiere productos con stock o venta que aún no están en el portafolio. Queda en borrador hasta "Revisar y aplicar"; por defecto existe en todas las cuentas donde tenga stock.</p>
+  </div>`;
 }
 function excCell(k, y){
   const ex = Object.entries(y.cuentas || {});
@@ -759,7 +774,12 @@ function bind(tab){
     on('[data-del-exc]', 'click', (e) => { const [k, id] = e.target.dataset.delExc.split('|'); delete S.work.tramos[k].cuentas[id]; changed(); });
     on('[data-del-tramo]', 'click', (e) => { const k = e.target.dataset.delTramo; if (S.base.tramos[k]) S.work.tramos[k] = null; else delete S.work.tramos[k]; changed(); });
     on('[data-undo-tramo]', 'click', (e) => { const k = e.target.dataset.undoTramo; S.work.tramos[k] = clone(S.base.tramos[k]); changed(); });
-    const bat = $('#b-add-tramo'); if (bat) bat.onclick = () => { const m = $('#n-modelo').value.trim(), mt = $('#n-match').value.trim(), t = +$('#n-tramo').value; if (!m || !mt) { toast('Escribe el modelo y su nombre de mercado'); return; } if (S.work.tramos[m]) { toast('Ese modelo ya está'); return; } S.work.tramos[m] = {match: mt, tramo: t, sp: false, pago: null, vigencia: 'Vigente', mide: true, cuentas: {}}; changed(); };
+    const bn = $('#b-nuevo'); if (bn) bn.onclick = () => { S.nuevoAbierto = true; renderMain(); const el = $('#n-modelo'); if (el) el.focus(); };
+    const bnc = $('#b-nuevo-cerrar'); if (bnc) bnc.onclick = () => { S.nuevoAbierto = false; renderMain(); };
+    const bat = $('#b-add-tramo'); if (bat) bat.onclick = () => { const m = $('#n-modelo').value.trim(), mt = $('#n-match').value.trim().toLowerCase(), t = +$('#n-tramo').value, mide = $('#n-mide').value === 'true', vig = $('#n-vig').value, sp = $('#n-sp').value;
+      if (!m || !mt) { toast('Escribe el modelo y su nombre de mercado'); return; } if (S.work.tramos[m]) { toast('Ese modelo ya está'); return; }
+      const dup = Object.entries(S.work.tramos).find(([k, x]) => x && (x.match||'').toLowerCase() === mt); if (dup) { toast(`Ese nombre de mercado ya lo usa ${dup[0]}`); return; }
+      S.work.tramos[m] = {match: mt, tramo: mide ? t : 1, sp: mide && t === 3 && !!sp, pago: mide && t === 3 && sp ? +sp : null, vigencia: vig, mide, cuentas: {}}; S.nuevoAbierto = false; toast(`${m} agregado al borrador`); changed(); };
     on('[data-moto]', 'change', (e) => { const el = e.target, m = S.work.moto[el.dataset.moto], f = el.dataset.f; if (f === 'precio') m.precio = el.value === '' ? null : +el.value; else if (f === 'pago') m.pago = el.value === '' ? null : +el.value; else m[f] = el.value; if (m.regla === '5pct_lista') { if (m.precio == null) { m.regla = 'manual'; toast('Sin precio de lista el pago queda manual'); } else m.pago = pago5(m.precio); } changed(); });
     on('[data-del-moto]', 'click', (e) => { const k = e.target.dataset.delMoto; if (S.base.moto[k]) S.work.moto[k] = null; else delete S.work.moto[k]; changed(); });
     on('[data-undo-moto]', 'click', (e) => { const k = e.target.dataset.undoMoto; S.work.moto[k] = clone(S.base.moto[k]); changed(); });
