@@ -214,7 +214,7 @@ function errMsg(e){
 function pickParams(r){ return {gate:N(r.gate_volumen_pct), peso_medio:N(r.peso_medio), peso_alto:N(r.peso_alto), piso:N(r.piso_tramo_pct), techo:N(r.techo_tramo_pct), umbral90:N(r.regla90_umbral), masivo_x: r.masivo_max_diario == null ? null : +r.masivo_max_diario, masivo_desc: r.masivo_descuenta_cumplimiento, estado: r.estado, notas: r.notas || ''}; }
 function pickPMeta(r){ return {semanas: r.semanas == null ? null : +r.semanas, gfk:N(r.factor_gfk), share_def:N(r.share_objetivo_default), piso_desempeno: !!r.piso_desempeno, evento: r.evento_nombre || '', alza_medio:N(r.alza_medio_pct), alza_medio_extra:N(r.alza_medio_extra_pct), alza_alto:N(r.alza_alto_pct), min_sig: r.min_signature_alto == null ? 0 : +r.min_signature_alto, f_fuera:N(r.factor_stock_fuera_meta), por_stock: !!r.reparto_por_stock, notas: r.notas || ''}; }
 function pickTramo(r){ return {match: r.market_name_match, tramo: +r.tramo, sp: !!r.es_super_premium, pago: N(r.pago_unidad_sp), vigencia: r.vigencia, mide: r.mide !== false, cuentas: {}}; }
-function pickMoto(r){ return {precio: N(r.precio_lista), pago: N(r.pago_unidad), regla: r.regla, nota: r.nota || ''}; }
+function pickMoto(r){ return {precio: N(r.precio_lista), pago: N(r.pago_unidad), regla: r.regla, nota: r.nota || '', match: r.market_name_match || '', vigencia: r.vigencia || 'Vigente', mide: r.mide !== false, cuentas: {}}; }
 function pickRegla(r){ return {prod:N(r.piso_productividad_dia), tope:N(r.tope_share_piso), min_b:N(r.min_base), min_m:N(r.min_medio), min_a:N(r.min_alto), max_a:N(r.max_alto), sig:r.min_signature_sin_stock == null ? null : +r.min_signature_sin_stock, por_venta: !!r.reparto_por_venta, motivo: r.motivo || ''}; }
 const EMPTY_REGLA = () => ({prod:null, tope:null, min_b:null, min_m:null, min_a:null, max_a:null, sig:null, por_venta:false, motivo:''});
 const reglaVacia = (r) => !r || (r.prod==null && r.tope==null && r.min_b==null && r.min_m==null && r.min_a==null && r.max_a==null && r.sig==null && !r.por_venta);
@@ -235,11 +235,13 @@ function normBase(d){
     headcount: Object.fromEntries(arr(d.headcount).map(r => [r.cargo, +r.n])),
     semanas: Object.fromEntries(arr(d.stock && d.stock.semanas).map(r => [String(r.cuenta_id), r])),
     stock: Object.fromEntries(arr(d.stock && d.stock.stock).map(r => [r.cuenta_id + '|' + r.modelo, r])),
+    motoStock: Object.fromEntries(arr(d.stock && d.stock.moto).map(r => [r.cuenta_id + '|' + r.accesorio, r])),
     otros: arr(d.stock && d.stock.otros),
     metas_periodos: arr(d.metas_periodos),
     ovr_meta: {}, ovr_tam: {},
   };
   for (const e of arr(d.tramos_cuenta)) if (base.tramos[e.modelo_nombre]) base.tramos[e.modelo_nombre].cuentas[String(e.cuenta_id)] = {estado: e.estado, motivo: e.motivo || ''};
+  for (const e of arr(d.moto_cuenta)) if (base.moto[e.accesorio]) base.moto[e.accesorio].cuentas[String(e.cuenta_id)] = {estado: e.estado, motivo: e.motivo || ''};
   return base;
 }
 function editable(b){
@@ -255,7 +257,7 @@ async function loadAll(keepDraft){
     S.periodos = d.periodos || []; S.prev = d.prev; S.base = normBase(d);
     const saved = keepDraft ? store('draft:' + perKey(S.periodo)) : null;
     S.work = editable(S.base);
-    if (saved && saved.v === 2) Object.assign(S.work, saved.work);
+    if (saved && saved.v === 3) Object.assign(S.work, saved.work);
     const curIdx = S.periodos.findIndex(p => perKey(p) === perKey(S.periodo));
     const prevMetas = S.base.metas_periodos.filter(m => { const i = S.periodos.findIndex(p => p.anio === m.anio && p.nombre === m.nombre); return i >= 0 && i < curIdx; });
     if (!S.compPeriodo || !S.base.metas_periodos.some(m => m.anio === S.compPeriodo.anio && m.nombre === S.compPeriodo.nombre)) { const last = prevMetas.length ? prevMetas[prevMetas.length - 1] : null; S.compPeriodo = last ? {anio: last.anio, nombre: last.nombre} : null; }
@@ -279,7 +281,7 @@ async function loadCheck(){
   try { const d = await rpc('app_checklist', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre}); S.check = {oficial: d.oficial || [], sin_clasificar: d.sin_clasificar || [], semana_ref: d.semana_ref, log: d.log || [], error: null}; }
   catch(e){ S.check = {oficial: [], sin_clasificar: [], stock_no_mide: [], log: [], error: errMsg(e)}; }
 }
-function saveDraft(){ store('draft:' + perKey(S.periodo), {v:2, work: S.work}); }
+function saveDraft(){ store('draft:' + perKey(S.periodo), {v:3, work: S.work}); }
 
 // ---------- diff del borrador ----------
 const PARAM_FIELDS = [
@@ -299,7 +301,7 @@ function changes(){
   if (b.params && w.params) for (const [k, lbl, kind] of PARAM_FIELDS) if (!same(b.params[k], w.params[k])) out.push({tabla:'param_variable_periodo', clave:k, txt:`${lbl}: ${fmtField(kind,b.params[k])} → ${fmtField(kind,w.params[k])}`, antes:b.params[k], despues:w.params[k]});
   if (b.pmeta && w.pmeta) for (const [k, lbl, kind] of PMETA_FIELDS) if (!same(b.pmeta[k], w.pmeta[k])) out.push({tabla:'param_meta_periodo', clave:k, txt:`${lbl}: ${fmtField(kind,b.pmeta[k])} → ${fmtField(kind,w.pmeta[k])}`, antes:b.pmeta[k], despues:w.pmeta[k]});
   for (const m of new Set([...Object.keys(b.tramos), ...Object.keys(w.tramos)])) { const x = b.tramos[m] || null, y = w.tramos[m] || null; if (!same(x, y)) out.push({tabla:'tramo_producto_periodo', clave:m, txt: !y ? `Quitar modelo ${m}` : !x ? `Agregar modelo ${m}: ${descTramo(y)}` : `${m}: ${descTramo(x)} → ${descTramo(y)}`, antes:x, despues:y}); }
-  for (const a of new Set([...Object.keys(b.moto), ...Object.keys(w.moto)])) { const x = b.moto[a] || null, y = w.moto[a] || null; if (!same(x, y)) out.push({tabla:'pago_motothings_periodo', clave:a, txt: !y ? `Quitar accesorio ${a}` : !x ? `Agregar accesorio ${a}: ${fCLP(y.pago)}` : `${a}: ${fCLP(x.pago)} → ${fCLP(y.pago)}${x.precio!==y.precio ? ' (lista ' + fCLP(y.precio) + ')' : ''}${x.nota!==y.nota ? ' · nota' : ''}`, antes:x, despues:y}); }
+  for (const a of new Set([...Object.keys(b.moto), ...Object.keys(w.moto)])) { const x = b.moto[a] || null, y = w.moto[a] || null; if (!same(x, y)) out.push({tabla:'pago_motothings_periodo', clave:a, txt: !y ? `Quitar accesorio ${a}` : !x ? `Agregar accesorio ${a}: ${fCLP(y.pago)}` : `${a}: ${[x.pago!==y.pago ? fCLP(x.pago)+' → '+fCLP(y.pago) : '', x.precio!==y.precio ? 'lista '+fCLP(y.precio) : '', x.vigencia!==y.vigencia ? y.vigencia : '', x.mide!==y.mide ? (y.mide ? 'vuelve a pagar' : 'deja de pagar') : '', x.match!==y.match ? 'nombre de mercado '+y.match : '', !same(x.cuentas, y.cuentas) ? 'existencia por cuenta' : '', x.nota!==y.nota ? 'nota' : ''].filter(Boolean).join(' · ')}`, antes:x, despues:y}); }
   for (const id of Object.keys(w.stc)) { const x = b.stc[id] ? {b:b.stc[id].b, m:b.stc[id].m, a:b.stc[id].a} : null, y = w.stc[id]; if (!same(x, y)) out.push({tabla:'share_tramo_cuenta', clave:id, txt:`Reparto fijo ${cname(id)}: ${x ? fP(x.b)+' / '+fP(x.m)+' / '+fP(x.a) : '—'} → ${fP(y.b)} / ${fP(y.m)} / ${fP(y.a)}`, antes:x, despues:y}); }
   for (const id of Object.keys(w.rango)) { const r = b.rango[id]; const x = r && (r.min!=null||r.max!=null||r.motivo) ? {min:r.min, max:r.max, motivo:r.motivo} : null, y = w.rango[id]; const yv = y && (y.min != null || y.max != null || y.motivo) ? y : null; if (!same(x, yv)) out.push({tabla:'share_rango_cuenta', clave:id, txt:`Rango share ${cname(id)}: ${x ? fP(x.min)+'–'+fP(x.max) : 'sin rango'} → ${yv ? fP(yv.min)+'–'+fP(yv.max) : 'sin rango'}`, antes:x, despues:yv}); }
   for (const id of new Set([...Object.keys(b.regla), ...Object.keys(w.regla)])) { const x = reglaVacia(b.regla[id]) ? null : b.regla[id], y = reglaVacia(w.regla[id]) ? null : w.regla[id]; if (!same(x, y)) out.push({tabla:'regla_cuenta_periodo', clave:id, txt:`Reglas ${cname(id)}: ${descRegla(x)} → ${descRegla(y)}`, antes:x, despues:y}); }
@@ -315,7 +317,7 @@ function draftProblems(){
   if (w.params) { if (Math.abs((w.params.peso_medio ?? 0) + (w.params.peso_alto ?? 0) - 1) > 1e-6) p.push('Los pesos de Medio y Alto deben sumar 100%.'); if (w.params.piso != null && w.params.piso > 1) p.push('El piso por tramo no puede superar 100%.'); if (w.params.techo != null && w.params.techo < 1) p.push('El techo por tramo no puede ser menor a 100%.'); }
   if (w.pmeta && w.pmeta.semanas != null && (w.pmeta.semanas < 3 || w.pmeta.semanas > 6)) p.push('Las semanas del ciclo deben ser 4 o 5.');
   for (const [m, t] of Object.entries(w.tramos)) if (t) { for (const [id, e] of Object.entries(t.cuentas || {})) if ((e.estado === 'Mide') === t.mide) p.push(`${m}: la excepción de ${cname(id)} es igual a la regla nacional; quítala.`); if (t.sp && t.tramo !== 3) p.push(`${m}: Super Premium solo puede estar en tramo Alto.`); if (t.sp && N(t.pago) == null) p.push(`${m}: falta el pago por unidad de Super Premium.`); if (t.sp && !t.mide) p.push(`${m}: un Super Premium tiene que medir.`); if (!t.match) p.push(`${m}: falta el nombre de mercado.`); }
-  for (const [a, m] of Object.entries(w.moto)) if (m && N(m.pago) == null) p.push(`${a}: falta el pago por unidad.`);
+  for (const [a, m] of Object.entries(w.moto)) if (m && m.mide && N(m.pago) == null) p.push(`${a}: falta el pago por unidad.`);
   for (const [id, s] of Object.entries(w.stc)) { const sum = (s.b||0)+(s.m||0)+(s.a||0); if (Math.abs(sum - 1) > 0.0005) p.push(`Reparto fijo de ${cname(id)}: suma ${fP(sum)}, debe sumar 100%.`); }
   for (const [id, r] of Object.entries(w.rango)) if (r && r.min != null && r.max != null && r.min > r.max) p.push(`Rango de ${cname(id)}: el mínimo supera al máximo.`);
   for (const [id, r] of Object.entries(w.regla)) if (r && r.prod != null && r.tope == null) p.push(`${cname(id)}: el piso de productividad necesita un tope de share.`);
@@ -445,7 +447,7 @@ function fieldHtml(obj, prevObj, k, lbl, kind, extra, opts){
 function viewPortafolio(){
   const b = S.base, w = S.work, pl = prevLbl();
   const sw = `<div class="ctrl" style="margin-bottom:-6px"><label class="lbl" for="v-port">Vista</label><select id="v-port"><option value="nacional" ${S.vistaPort==='nacional'?'selected':''}>Nacional</option><option value="cuenta" ${S.vistaPort==='cuenta'?'selected':''}>Catálogo por cuenta</option></select>${S.vistaPort==='cuenta' ? `<label class="lbl" for="c-cat">Cuenta</label><select id="c-cat">${b.cuentas.filter(c => b.semanas[String(c.id)]).map(c => `<option value="${c.id}" ${String(c.id)===String(S.cuentaCat)?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select>` : ''}</div>`;
-  if (S.vistaPort === 'cuenta') { const cid = S.cuentaCat || (b.cuentas.find(c => b.semanas[String(c.id)]) || {}).id; S.cuentaCat = cid; return sw + panelCatalogo(String(cid)) + panelMoto(pl); }
+  if (S.vistaPort === 'cuenta') { const cid = S.cuentaCat || (b.cuentas.find(c => b.semanas[String(c.id)]) || {}).id; S.cuentaCat = cid; return sw + panelCatalogo(String(cid)) + panelMotoCuenta(String(cid)); }
   const keys = [...new Set([...Object.keys(b.tramos), ...Object.keys(w.tramos)])].sort((x, y) => { const tx = (w.tramos[x]||b.tramos[x]), ty = (w.tramos[y]||b.tramos[y]); return (ty.tramo - tx.tramo) || x.localeCompare(y); });
   const vis = keys.filter(k => { const t = w.tramos[k]; if (S.tramoFiltro === 'todos' || !t) return true; const exc = Object.keys(t.cuentas||{}).length > 0; return S.tramoFiltro === 'miden' ? (t.mide || exc) : (!t.mide || exc); });
   const nDif = keys.filter(k => w.tramos[k] && b.master[k] && b.master[k].tramo !== w.tramos[k].tramo).length;
@@ -550,24 +552,50 @@ function excCell(k, y){
   const opts = S.base.cuentas.filter(c => !used.has(String(c.id))).map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
   return `<div class="chips">${chips || (RO() ? '<span class="muted">regla nacional</span>' : '')}${RO() || !opts ? '' : `<select data-add-exc="${esc(k)}" aria-label="Agregar excepción por cuenta para ${esc(k)}"><option value="">+ cuenta…</option>${opts}</select>`}</div>`;
 }
+function motoExisteSug(cid, k){ const r = S.base.motoStock[cid + '|' + k]; return !!(r && ((N(r.prom)||0) > 0 || (N(r.venta4)||0) > 0)); }
 function panelMoto(pl){
-  const b = S.base, w = S.work;
-  const keys = [...new Set([...Object.keys(b.moto), ...Object.keys(w.moto)])].sort((x, y) => ((w.moto[y]||b.moto[y]).pago||0) - ((w.moto[x]||b.moto[x]).pago||0) || x.localeCompare(y));
+  const b = S.base, w = S.work, ro = RO();
+  const keys = [...new Set([...Object.keys(b.moto), ...Object.keys(w.moto)])].sort((x, y) => { const a = w.moto[x]||b.moto[x], c = w.moto[y]||b.moto[y]; return (c.mide - a.mide) || ((c.pago||0) - (a.pago||0)) || x.localeCompare(y); });
+  const cuentas = b.cuentas.filter(c => b.semanas[String(c.id)]);
   const rows = keys.map(k => {
     const x = b.moto[k], y = w.moto[k], pv = b.moto_prev[k];
-    if (!y) return `<tr class="removed"><td>${esc(k)}</td><td colspan="${pl?5:4}">Se quita del período</td><td><button class="link" data-undo-moto="${esc(k)}">Deshacer</button></td></tr>`;
-    const ch = !same(x, y), auto = y.regla === '5pct_lista';
-    return `<tr class="${ch?'changed':''}"><td><b>${esc(k)}</b></td>
-      <td class="num"><input type="number" step="990" min="0" data-moto="${esc(k)}" data-f="precio" value="${y.precio ?? ''}" placeholder="pendiente" aria-label="Precio de lista ${esc(k)}" ${RO()?'disabled':''}></td>
-      <td><select data-moto="${esc(k)}" data-f="regla" aria-label="Regla ${esc(k)}" ${RO()?'disabled':''}><option value="5pct_lista" ${auto?'selected':''}>5% de lista</option><option value="manual" ${!auto?'selected':''}>Manual</option></select></td>
-      <td class="num">${auto ? `<b>${fCLP(y.pago)}</b>` : `<input type="number" step="500" min="0" data-moto="${esc(k)}" data-f="pago" value="${y.pago ?? ''}" aria-label="Pago ${esc(k)}" ${RO()?'disabled':''}>`}</td>
-      <td><input data-moto="${esc(k)}" data-f="nota" value="${esc(y.nota)}" class="w-l" aria-label="Nota ${esc(k)}" ${RO()?'disabled':''}></td>
-      ${pl ? `<td class="num prev">${pv ? fCLP(pv.pago) : 'nuevo'}</td>` : ''}<td>${RO() ? '' : `<button class="link danger" data-del-moto="${esc(k)}" aria-label="Quitar ${esc(k)}">Quitar</button>`}</td></tr>`;
+    if (!y) return `<tr class="removed"><td>${esc(k)}</td><td colspan="${pl?8:7}">Se quita del período</td><td><button class="link" data-undo-moto="${esc(k)}">Deshacer</button></td></tr>`;
+    const ch = !same(x, y), auto = y.regla === '5pct_lista', dis = ro ? 'disabled' : '';
+    const noex = Object.entries(y.cuentas||{}).filter(([,e]) => e.estado === 'No existe').map(([id]) => cname(id));
+    const nStock = cuentas.filter(c => motoExisteSug(String(c.id), k)).length;
+    return `<tr class="${ch?'changed':''} ${y.mide?'':'dim'}"><td><b>${esc(k)}</b><div class="muted" style="font-size:12px">${esc(y.match || k.toLowerCase())}</div></td>
+      <td><span class="muted" title="Cuentas donde tiene stock o venta en tiendas con promotor; se ajusta en Catálogo por cuenta">${nStock}/${cuentas.length}${noex.length ? ` <span class="pill">no en ${esc(noex.join(', '))}</span>` : ''}</span></td>
+      <td><select data-moto="${esc(k)}" data-f="vigencia" aria-label="Ciclo de vida ${esc(k)}" ${dis}><option ${y.vigencia==='Vigente'?'selected':''}>Vigente</option><option ${y.vigencia==='EOL'?'selected':''}>EOL</option></select></td>
+      <td><label class="sw"><input type="checkbox" data-moto="${esc(k)}" data-f="mide" ${y.mide?'checked':''} ${dis}> ${y.mide ? 'Paga' : 'No paga'}</label></td>
+      <td class="num">${y.mide ? `<input type="number" step="990" min="0" data-moto="${esc(k)}" data-f="precio" value="${y.precio ?? ''}" placeholder="pendiente" aria-label="Precio de lista ${esc(k)}" ${dis}>` : '<span class="muted">—</span>'}</td>
+      <td>${y.mide ? `<select data-moto="${esc(k)}" data-f="regla" aria-label="Regla ${esc(k)}" ${dis}><option value="5pct_lista" ${auto?'selected':''}>5% de lista</option><option value="manual" ${!auto?'selected':''}>Manual</option></select>` : '<span class="muted">—</span>'}</td>
+      <td class="num">${!y.mide ? '<span class="muted">—</span>' : auto ? `<b>${fCLP(y.pago)}</b>` : `<input type="number" step="500" min="0" data-moto="${esc(k)}" data-f="pago" value="${y.pago ?? ''}" aria-label="Pago ${esc(k)}" ${dis}>`}</td>
+      <td><input data-moto="${esc(k)}" data-f="nota" value="${esc(y.nota)}" class="w-l" aria-label="Nota ${esc(k)}" ${dis}></td>
+      ${pl ? `<td class="num prev">${pv ? fCLP(pv.pago) : 'nuevo'}</td>` : ''}<td>${ro ? '' : `<button class="link danger" data-del-moto="${esc(k)}" aria-label="Quitar ${esc(k)}">Quitar</button>`}</td></tr>`;
   }).join('');
-  return `<section class="panel"><div class="panel-head"><h2>Motothings</h2><span class="muted">Pago lineal por unidad, sin gate y sin techo; no modifican la meta</span></div>
-    <p class="hint">Con la regla <b>5% de lista</b> el pago se calcula solo (precio de lista más alto en canales oficiales, redondeado a $500). <b>Manual</b> sirve mientras falta el precio.</p>
-    <div class="tbl"><table><thead><tr><th>Accesorio</th><th class="num">Precio de lista</th><th>Regla</th><th class="num">Pago por unidad</th><th>Nota</th>${pl?`<th class="num">${esc(pl)}</th>`:''}<th></th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="empty">Sin accesorios.</td></tr>`}</tbody></table></div>
-    ${RO() ? '' : `<div class="addrow"><div class="f"><label class="lbl" for="n-acc">Accesorio</label><input id="n-acc" placeholder="Moto Buds 3"></div><div class="f"><label class="lbl" for="n-precio">Precio de lista</label><input id="n-precio" type="number" step="990" min="0"></div><button id="b-add-moto">Agregar accesorio</button></div>`}</section>`;
+  const nPaga = keys.filter(k => w.moto[k] && w.moto[k].mide).length, nNo = keys.filter(k => w.moto[k] && !w.moto[k].mide).length;
+  return `<section class="panel"><div class="panel-head"><h2>Motothings</h2><div class="ctrl"><span class="pill ok">${nPaga} pagan</span><span class="pill">${nNo} no pagan</span><span class="muted">Pago lineal por unidad, sin gate y sin techo; no modifican la meta</span></div></div>
+    <p class="hint">Mismo flujo que los teléfonos: <b>1</b> en qué cuentas <b>existe</b> (se sugiere por stock y venta; se corrige en Catálogo por cuenta) → <b>2</b> ciclo de vida → <b>3</b> si <b>paga</b> este período → <b>4</b> cuánto: con <b>5% de lista</b> el pago se calcula solo (precio de lista más alto en canales oficiales, redondeado a $500); <b>Manual</b> sirve mientras falta el precio. Un accesorio que no paga sigue en el catálogo pero no genera variable.</p>
+    <div class="tbl"><table><thead><tr><th>Accesorio</th><th><span class="step">1</span>Existe en</th><th><span class="step">2</span>Ciclo de vida</th><th><span class="step">3</span>Paga</th><th class="num"><span class="step">4</span>Precio de lista</th><th>Regla</th><th class="num">Pago por unidad</th><th>Nota</th>${pl?`<th class="num">${esc(pl)}</th>`:''}<th></th></tr></thead><tbody>${rows || `<tr><td colspan="10" class="empty">Sin accesorios.</td></tr>`}</tbody></table></div>
+    ${ro ? '' : `<div class="addrow"><div class="f"><label class="lbl" for="n-acc">Accesorio</label><input id="n-acc" placeholder="Moto Buds 3"></div><div class="f"><label class="lbl" for="n-acc-match">Nombre de mercado en TRADE</label><input id="n-acc-match" class="w-l" placeholder="moto buds 3"></div><div class="f"><label class="lbl" for="n-precio">Precio de lista</label><input id="n-precio" type="number" step="990" min="0"></div><button id="b-add-moto">Agregar accesorio</button></div>`}</section>`;
+}
+function panelMotoCuenta(cid){
+  const b = S.base, w = S.work, nombre = cname(cid), ro = RO();
+  const keys = Object.keys(w.moto).filter(k => w.moto[k]);
+  if (!keys.length) return '';
+  const rows = keys.map(k => { const m = w.moto[k], exc = (m.cuentas||{})[cid], r = b.motoStock[cid + '|' + k] || {}, sug = motoExisteSug(cid, k); return {k, m, exc, r, sug, existe: exc ? exc.estado === 'Existe' : sug}; });
+  rows.sort((x, y) => (y.existe - x.existe) || (y.m.mide - x.m.mide) || ((N(y.r.prom)||0) - (N(x.r.prom)||0)) || x.k.localeCompare(y.k));
+  const nEx = rows.filter(x => x.existe).length;
+  const body = rows.map(x => { const v = N(x.r.prom), v4 = N(x.r.venta4), k = esc(x.k), dis = ro ? 'disabled' : '';
+    return `<tr class="${!x.existe ? 'none' : x.m.mide ? '' : 'dim'} ${x.exc ? 'changed' : ''}"><td><b>${k}</b></td>
+      <td><select data-moto-existe="${k}" aria-label="¿${k} existe en ${esc(nombre)}?" ${dis}><option value="si" ${x.existe?'selected':''}>Sí</option><option value="no" ${!x.existe?'selected':''}>No</option></select><div class="muted" style="font-size:11px">${x.exc ? 'declarado' : 'sugerido'}</div></td>
+      <td class="num">${fN(v)}</td><td class="num">${x.r.tiendas ?? '—'}</td><td class="num">${fN(v4)}</td>
+      <td>${x.existe ? `<select data-moto="${k}" data-f="vigencia" aria-label="Ciclo de vida ${k} (nacional)" ${dis}><option ${x.m.vigencia==='Vigente'?'selected':''}>Vigente</option><option ${x.m.vigencia==='EOL'?'selected':''}>EOL</option></select>` : `<span class="muted">${esc(x.m.vigencia)}</span>`}</td>
+      <td>${x.existe ? `<label class="sw"><input type="checkbox" data-moto="${k}" data-f="mide" ${x.m.mide?'checked':''} ${dis}> ${x.m.mide ? 'Paga' : 'No paga'}</label>` : '<span class="muted">—</span>'}</td>
+      <td class="num">${x.existe && x.m.mide ? `<b>${fCLP(x.m.pago)}</b>` : '<span class="muted">—</span>'}</td></tr>`; }).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Motothings en ${esc(nombre)}</h2><span class="muted">${nEx} de ${rows.length} existen · stock y venta de 4 semanas en tiendas con promotor</span></div>
+    <p class="hint">Qué accesorios <b>existen</b> en ${esc(nombre)} se sugiere por stock o venta y se puede corregir. Ciclo de vida, si paga y cuánto son <b>nacionales</b>.</p>
+    <div class="tbl"><table><thead><tr><th>Accesorio</th><th><span class="step">1</span>Existe</th><th class="num">Stock</th><th class="num">Tdas.</th><th class="num">Venta 4s</th><th><span class="step">2</span>Ciclo <span class="muted">nac.</span></th><th><span class="step">3</span>Paga <span class="muted">nac.</span></th><th class="num">Pago/u</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
 }
 
 // ----- Construcción de la meta -----
@@ -780,10 +808,11 @@ function bind(tab){
       if (!m || !mt) { toast('Escribe el modelo y su nombre de mercado'); return; } if (S.work.tramos[m]) { toast('Ese modelo ya está'); return; }
       const dup = Object.entries(S.work.tramos).find(([k, x]) => x && (x.match||'').toLowerCase() === mt); if (dup) { toast(`Ese nombre de mercado ya lo usa ${dup[0]}`); return; }
       S.work.tramos[m] = {match: mt, tramo: mide ? t : 1, sp: mide && t === 3 && !!sp, pago: mide && t === 3 && sp ? +sp : null, vigencia: vig, mide, cuentas: {}}; S.nuevoAbierto = false; toast(`${m} agregado al borrador`); changed(); };
-    on('[data-moto]', 'change', (e) => { const el = e.target, m = S.work.moto[el.dataset.moto], f = el.dataset.f; if (f === 'precio') m.precio = el.value === '' ? null : +el.value; else if (f === 'pago') m.pago = el.value === '' ? null : +el.value; else m[f] = el.value; if (m.regla === '5pct_lista') { if (m.precio == null) { m.regla = 'manual'; toast('Sin precio de lista el pago queda manual'); } else m.pago = pago5(m.precio); } changed(); });
+    on('[data-moto-existe]', 'change', (e) => { const k = e.target.dataset.motoExiste, cid = String(S.cuentaCat), m = S.work.moto[k]; m.cuentas = m.cuentas || {}; const sug = motoExisteSug(cid, k); const want = e.target.value === 'si'; if (want === sug) delete m.cuentas[cid]; else m.cuentas[cid] = {estado: want ? 'Existe' : 'No existe', motivo: ''}; changed(); });
+    on('[data-moto]', 'change', (e) => { const el = e.target, m = S.work.moto[el.dataset.moto], f = el.dataset.f; if (f === 'precio') m.precio = el.value === '' ? null : +el.value; else if (f === 'pago') m.pago = el.value === '' ? null : +el.value; else if (f === 'mide') m.mide = el.checked; else m[f] = el.value; if (m.regla === '5pct_lista') { if (m.precio == null) { m.regla = 'manual'; toast('Sin precio de lista el pago queda manual'); } else m.pago = pago5(m.precio); } changed(); });
     on('[data-del-moto]', 'click', (e) => { const k = e.target.dataset.delMoto; if (S.base.moto[k]) S.work.moto[k] = null; else delete S.work.moto[k]; changed(); });
     on('[data-undo-moto]', 'click', (e) => { const k = e.target.dataset.undoMoto; S.work.moto[k] = clone(S.base.moto[k]); changed(); });
-    const bam = $('#b-add-moto'); if (bam) bam.onclick = () => { const a = $('#n-acc').value.trim(), p = $('#n-precio').value; if (!a) { toast('Escribe el nombre del accesorio'); return; } if (S.work.moto[a]) { toast('Ese accesorio ya está'); return; } const precio = p === '' ? null : +p; S.work.moto[a] = {precio, pago: precio == null ? 0 : pago5(precio), regla: precio == null ? 'manual' : '5pct_lista', nota: precio == null ? 'precio pendiente' : ''}; changed(); };
+    const bam = $('#b-add-moto'); if (bam) bam.onclick = () => { const a = $('#n-acc').value.trim(), p = $('#n-precio').value, mt = ($('#n-acc-match').value.trim() || a).toLowerCase(); if (!a) { toast('Escribe el nombre del accesorio'); return; } if (S.work.moto[a]) { toast('Ese accesorio ya está'); return; } const precio = p === '' ? null : +p; S.work.moto[a] = {precio, pago: precio == null ? 0 : pago5(precio), regla: precio == null ? 'manual' : '5pct_lista', nota: precio == null ? 'precio pendiente' : '', match: mt, vigencia: 'Vigente', mide: true, cuentas: {}}; changed(); };
   }
   if (tab === 'meta') {
     on('[id^="m-"][data-fld]', 'change', (e) => { const el = e.target; S.work.pmeta[el.dataset.fld] = readFld(el, el.dataset.kind); changed(); });
