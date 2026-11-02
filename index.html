@@ -109,6 +109,7 @@ input[type=file]{font-size:13px}
 .chips select[data-add-exc]{font-size:12.5px;padding:2px 4px;color:var(--muted)}
 .addrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding-top:6px;border-top:1px dashed var(--line)}
 .addrow .f{display:flex;flex-direction:column;gap:3px}
+.ciclo{font-size:12.5px;white-space:nowrap;border-bottom:1px dotted var(--muted);cursor:help}
 .statgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
 .stat{border:1px solid var(--soft);border-radius:8px;padding:10px 12px}
 .stat b{display:block;font-family:var(--f-display);font-size:22px;font-variant-numeric:tabular-nums}
@@ -135,6 +136,7 @@ pre.sql{font-family:var(--f-mono);font-size:12px;background:var(--soft);border-r
       <div class="ctrl">
         <label class="lbl" for="sel-periodo">Período</label>
         <select id="sel-periodo" disabled><option>Cargando…</option></select>
+        <span id="ciclo" class="ciclo muted"></span>
         <span id="pill-estado" class="pill">—</span>
       </div>
       <div class="grow"></div>
@@ -191,6 +193,12 @@ function toast(msg){ const t = document.createElement('div'); t.className='toast
 const fW = (w) => w ? String(w).slice(0,4) + ' W' + String(w).slice(4) : '—';
 const perKey = (p) => p ? p.anio + '|' + p.nombre : '';
 const perLbl = (p) => p ? p.nombre + ' ' + p.anio : '—';
+const perInfo = (p) => p ? (S.periodos || []).find(x => x.anio === p.anio && x.nombre === p.nombre) || null : null;
+const nSem = (p) => { const i = perInfo(p); return i && i.n_sem ? +i.n_sem : null; };
+const DIAS = ['dom','lun','mar','mié','jue','vie','sáb'], MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const fD = (s) => { if (!s) return ''; const [y, m, d] = String(s).slice(0,10).split('-').map(Number); const dt = new Date(Date.UTC(y, m-1, d)); return `${DIAS[dt.getUTCDay()]} ${String(d).padStart(2,'0')}-${MESES[m-1]}`; };
+const cicloTxt = (p) => { const i = perInfo(p); if (!i) return ''; return `${fD(i.inicio)} → ${fD(i.fin)} · ${i.n_sem} semanas (S${i.s_ini}–S${i.s_fin})`; };
+const cicloTitle = (p) => { const i = perInfo(p); if (!i || !i.semanas) return ''; return 'Ciclo de semanas lun–dom, no mes calendario:\n' + i.semanas.map(s => `S${s.s}: ${fD(s.ini)} → ${fD(s.fin)}`).join('\n'); };
 const cname = (id) => (((S.base && S.base.cuentas) || []).find(c => String(c.id) === String(id)) || {}).nombre || ('cuenta ' + id);
 const RO = () => !(S.yo && S.yo.rol === 'editor');
 
@@ -420,7 +428,8 @@ function actImportar(prev){
 function render(){ renderHeader(); renderTabs(); renderMain(); }
 function renderHeader(){
   const sel = $('#sel-periodo');
-  if (S.periodos.length) { sel.innerHTML = S.periodos.map(p => `<option value="${esc(perKey(p))}" ${perKey(p)===perKey(S.periodo)?'selected':''}>${esc(perLbl(p))}</option>`).join(''); sel.disabled = S.mode !== 'live' || S.busy; }
+  if (S.periodos.length) { sel.innerHTML = S.periodos.map(p => `<option value="${esc(perKey(p))}" ${perKey(p)===perKey(S.periodo)?'selected':''}>${esc(perLbl(p))}${p.n_sem ? ' · ' + p.n_sem + ' sem' : ''}</option>`).join(''); sel.disabled = S.mode !== 'live' || S.busy; }
+  const ci = $('#ciclo'); if (ci) { ci.textContent = cicloTxt(S.periodo); ci.title = cicloTitle(S.periodo); }
   const pill = $('#pill-estado');
   if (S.base && S.base.params) { const c = S.base.params.estado === 'confirmado'; pill.className = 'pill ' + (c ? 'ok' : 'warn'); pill.textContent = 'Supuestos ' + (c ? 'confirmados' : 'en borrador'); }
   else if (S.base) { pill.className = 'pill bad'; pill.textContent = 'Sin supuestos'; }
@@ -619,7 +628,7 @@ function panelMotoCuenta(cid){
 // ----- Construcción de la meta -----
 function viewMeta(){
   const b = S.base, w = S.work, pl = prevLbl();
-  if (!w.pmeta) { w.pmeta = {semanas:null, gfk:null, share_def:0.2, share_sp:0.1, share_sp_alto:0.08, umbral_sp:null, piso_desempeno:true, evento:'', alza_medio:0, alza_medio_extra:0, alza_alto:0, min_sig:0, f_fuera:0.5, por_stock:true, notas:''}; }
+  if (!w.pmeta) { w.pmeta = {semanas:nSem(S.periodo), gfk:null, share_def:0.2, share_sp:0.1, share_sp_alto:0.08, umbral_sp:null, piso_desempeno:true, evento:'', alza_medio:0, alza_medio_extra:0, alza_alto:0, min_sig:0, f_fuera:0.5, por_stock:true, notas:''}; }
   const bp = b.pmeta || {}, wp = w.pmeta, pp = b.pmeta_prev;
   const F = (k, lbl, kind, extra, opts) => fieldHtml(wp, pp, k, lbl, kind, extra, Object.assign({prefix:'m', ch: !same(bp[k], wp[k])}, opts || {}));
   const per = S.periodos.find(p => perKey(p) === perKey(S.periodo));
@@ -631,7 +640,7 @@ function viewMeta(){
     <div class="formula">Meta total = TAM semanal × semanas × factor GfK × share objetivo  →  reparto Base / Medio / Alto por stock de la tienda  →  ajustes</div>
     <div class="formula">Share objetivo = max( min( max(mín cuenta, histórico + margen, objetivo anterior), máx cuenta ), histórico si piso de desempeño )</div>
     <div class="grid-params">
-      ${F('semanas','Semanas del ciclo','int','',{unit:'sem'})}
+      ${F('semanas','Semanas del ciclo','int', (() => { const n = nSem(S.periodo); if (!n) return ''; return wp.semanas != null && wp.semanas !== n ? `<span class="pill warn">El calendario dice ${n} semanas (${esc(cicloTxt(S.periodo))})</span>` : `Calendario: ${esc(cicloTxt(S.periodo))}`; })(), {unit:'sem'})}
       ${F('gfk','Factor GfK','num','Venta/día del mes objetivo ÷ venta/día ponderada de los meses base. Octubre fue 1,52.')}
       ${F('share_def','Share objetivo por defecto','pct','Cuando la cuenta no tiene mínimo propio.')}
       ${F('piso_desempeno','Piso de desempeño','bool','El techo de la cuenta nunca baja la meta por debajo del ritmo real de la tienda.')}
@@ -725,9 +734,10 @@ function viewMetas(){
   const tot = (k, arr) => arr.reduce((s, f) => s + (N(f[k]) || 0), 0);
   const metodos = [...new Set(conMeta.map(f => f.metodo_meta))], estados = [...new Set(conMeta.map(f => f.estado))];
   const comp = S.compPeriodo, totComp = tot('meta_comp', filas);
+  const sA = nSem(S.periodo), sB = comp ? nSem(comp) : null, kSem = sA && sB ? sA / sB : 1;
   const compOpts = (S.base.metas_periodos || []).filter(m => !(m.anio === S.periodo.anio && m.nombre === S.periodo.nombre)).map(m => `<option value="${esc(m.anio+'|'+m.nombre)}" ${comp && comp.anio===m.anio && comp.nombre===m.nombre ? 'selected' : ''}>${esc(m.nombre+' '+m.anio)} · ${m.n} filas · ${esc(m.metodos)}</option>`).join('');
   const byC = {}; for (const f of filas) { const c = byC[f.cuenta] = byC[f.cuenta] || {t:0, meta:0, b:0, m:0, a:0, comp:0, sinMeta:0, piso:0}; c.t++; c.meta += N(f.meta_total)||0; c.b += N(f.meta_base)||0; c.m += N(f.meta_medio)||0; c.a += N(f.meta_alto)||0; c.comp += N(f.meta_comp)||0; if (N(f.meta_total)==null && f.n_cob>0) c.sinMeta++; if (f.share_rango_aplicado==='piso_desempeno') c.piso++; }
-  const dCell = (a, b) => { const d = b ? a / b - 1 : null; if (d == null || !a) return '<td class="num muted">—</td>'; return `<td class="num"><span class="${Math.abs(d) >= 0.25 ? 'pill warn' : ''}">${d>0?'+':''}${nf1.format(d*100)}%</span></td>`; };
+  const dCell = (a, b) => { const d = b ? a / (b * kSem) - 1 : null; if (d == null || !a) return '<td class="num muted">—</td>'; return `<td class="num"><span class="${Math.abs(d) >= 0.25 ? 'pill warn' : ''}">${d>0?'+':''}${nf1.format(d*100)}%</span></td>`; };
   const resumen = Object.entries(byC).map(([c, v]) => `<tr><td><b>${esc(c)}</b></td><td class="num">${v.t}</td><td class="num">${fN(v.meta)}</td><td class="num">${fN(v.b)}</td><td class="num">${fN(v.m)}</td><td class="num">${fN(v.a)}</td><td class="num">${v.meta ? fP(v.a / v.meta) : '—'}</td><td class="num">${comp ? fN(v.comp) : '—'}</td>${comp ? dCell(v.meta, v.comp) : '<td class="num muted">—</td>'}<td><div class="chips">${v.sinMeta ? `<span class="pill bad">${v.sinMeta} sin meta</span>` : ''}${v.piso ? `<span class="pill acc">${v.piso} piso desempeño</span>` : ''}</div></td></tr>`).join('');
   const fc = S.metasFiltro.cuenta, q = S.metasFiltro.q.toLowerCase();
   const det = filas.filter(f => (!fc || f.cuenta === fc) && (!q || (f.tienda + ' ' + f.id_local + ' ' + (f.promotores||'') + ' ' + (f.supervisor||'') + ' ' + (f.merchandiser||'')).toLowerCase().includes(q)));
@@ -739,7 +749,7 @@ function viewMetas(){
   const prev = S.importPrev;
   const tipoSel = `<label class="lbl" for="f-tipo">Tiendas</label><select id="f-tipo">${['con_promotor','supervisor','otras','todas'].map(t => `<option value="${t}" ${ft===t?'selected':''}>${t === 'todas' ? 'Todas' : TIPO_LBL[t]}${nTipo[t] ? ` (${nTipo[t].n})` : t === 'todas' ? ` (${todas.length})` : ''}</option>`).join('')}</select>`;
   return `<section class="panel"><div class="panel-head"><h2>Metas de ${esc(perLbl(S.periodo))}</h2><div class="ctrl">${tipoSel}<label class="lbl" for="sel-comp">Comparar con</label><select id="sel-comp"><option value="">Sin comparación</option>${compOpts}</select></div></div>
-    <div class="statgrid"><div class="stat"><b>${ft === 'con_promotor' ? conCob.length : filas.length}</b><span>${ft === 'con_promotor' ? 'tiendas con cobertura vigente' : 'tiendas ' + (TIPO_LBL[ft] || 'en total').toLowerCase()}</span></div><div class="stat"><b>${conMeta.length}</b><span>con meta ${metodos.length ? '· ' + esc(metodos.map(m => m === 'importada_base_touch' ? 'importada' : m).join(', ')) : ''}${estados.length ? ' · ' + esc(estados.join(', ')) : ''}</span></div><div class="stat"><b>${fN(tot('meta_total', filas))}</b><span>unidades de meta total</span></div><div class="stat"><b>${comp ? fN(totComp) : '—'}</b><span>${comp ? 'meta de ' + esc(perLbl(comp)) + ' en esas tiendas' : 'sin comparación'}</span></div></div>
+    <div class="statgrid"><div class="stat"><b>${ft === 'con_promotor' ? conCob.length : filas.length}</b><span>${ft === 'con_promotor' ? 'tiendas con cobertura vigente' : 'tiendas ' + (TIPO_LBL[ft] || 'en total').toLowerCase()}</span></div><div class="stat"><b>${conMeta.length}</b><span>con meta ${metodos.length ? '· ' + esc(metodos.map(m => m === 'importada_base_touch' ? 'importada' : m).join(', ')) : ''}${estados.length ? ' · ' + esc(estados.join(', ')) : ''}</span></div><div class="stat"><b>${fN(tot('meta_total', filas))}</b><span>unidades de meta total${sA ? ` · ${fN(tot('meta_total', filas) / sA)} por semana (${sA} sem)` : ''}</span></div><div class="stat"><b>${comp ? fN(totComp) : '—'}</b><span>${comp ? 'meta de ' + esc(perLbl(comp)) + ' en esas tiendas' + (sB ? ` · ${fN(totComp / sB)} por semana (${sB} sem)` : '') : 'sin comparación'}</span></div></div>
     ${!conMeta.length ? `<div class="banner warn"><p>${esc(perLbl(S.periodo))} todavía no tiene metas en TRADE. Importa la Base de trabajo de Touch o genera con el motor de TRADE.</p></div>` : ''}
     ${S.importAviso ? `<div class="banner warn"><p>${esc(S.importAviso)}</p></div>` : ''}
   </section>
@@ -754,11 +764,11 @@ function viewMetas(){
   ${panelOverrides()}
   ${supRows ? `<section class="panel"><div class="panel-head"><h2>Meta de zona por supervisor</h2><span class="muted">Con promotor + sin promotor asignadas; "Otras tiendas" no suman</span></div>
     <div class="tbl"><table><thead><tr><th>Supervisor</th><th>Zona</th><th class="num">Tiendas c/prom.</th><th class="num">Meta c/prom.</th><th class="num">Tiendas s/prom.</th><th class="num">Meta s/prom.</th><th class="num">Meta zona</th></tr></thead><tbody>${supRows}</tbody></table></div></section>` : ''}
-  <section class="panel"><div class="panel-head"><h2>Resumen por cuenta <span class="muted" style="font-weight:400">· ${esc(ft === 'todas' ? 'todas las tiendas' : TIPO_LBL[ft])}</span></h2><span class="muted">${comp ? 'Δ contra ' + esc(perLbl(comp)) + '; marcado sobre ±25%' : ''}</span></div>
-    <div class="tbl"><table><thead><tr><th>Cuenta</th><th class="num">Tiendas</th><th class="num">Meta total</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">% Alto</th><th class="num">${comp ? esc(perLbl(comp)) : 'Comp.'}</th><th class="num">Δ</th><th></th></tr></thead><tbody>${resumen || '<tr><td colspan="10" class="empty">Sin tiendas.</td></tr>'}</tbody></table></div></section>
+  <section class="panel"><div class="panel-head"><h2>Resumen por cuenta <span class="muted" style="font-weight:400">· ${esc(ft === 'todas' ? 'todas las tiendas' : TIPO_LBL[ft])}</span></h2><span class="muted">${comp ? 'Δ semanal contra ' + esc(perLbl(comp)) + (kSem !== 1 ? ` (${sA} vs ${sB} semanas: se compara meta ÷ semanas)` : '') + '; marcado sobre ±25%' : ''}</span></div>
+    <div class="tbl"><table><thead><tr><th>Cuenta</th><th class="num">Tiendas</th><th class="num">Meta total</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">% Alto</th><th class="num">${comp ? esc(perLbl(comp)) : 'Comp.'}</th><th class="num" title="Variación de la meta por semana: cada período se divide por sus semanas de ciclo">Δ / sem</th><th></th></tr></thead><tbody>${resumen || '<tr><td colspan="10" class="empty">Sin tiendas.</td></tr>'}</tbody></table></div></section>
   <section class="panel"><div class="panel-head"><h2>Detalle por tienda</h2><div class="ctrl"><label class="lbl" for="f-cuenta">Cuenta</label><select id="f-cuenta"><option value="">Todas</option>${cuentas.map(c => `<option ${c===fc?'selected':''}>${esc(c)}</option>`).join('')}</select><input id="f-q" placeholder="Buscar tienda, código o promotor" value="${esc(S.metasFiltro.q)}"></div></div>
     <p class="hint">${ft === 'con_promotor' ? 'Una fila por tienda. Dos promotores en una tienda responden cada uno contra la meta completa. Medio y Alto pagan el pool; Base solo suma al Gate.' : ft === 'supervisor' ? 'Tiendas sin promotor asignadas a un supervisor: su meta suma a la meta de zona. Regla: max(histórico × semanas × GfK ; share sin promotor × TAM), sin rango por cuenta ni pisos.' : ft === 'otras' ? 'Tiendas con solo merchandiser o INGRAM. Tienen meta de referencia con la regla sin promotor, pero no suman a supervisores ni al variable.' : 'Todas las tiendas con meta o asignación en el período.'}</p>
-    <div class="tbl tall"><table><thead><tr><th>Cuenta</th><th>Tienda y promotores</th><th class="num">TAM</th><th class="num">Share hist.</th><th class="num">Share obj.</th><th class="num">Meta</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">${comp ? esc(comp.nombre) : 'Comp.'}</th><th class="num">Δ</th><th>Notas</th></tr></thead><tbody>${detRows || '<tr><td colspan="12" class="empty">Sin resultados.</td></tr>'}</tbody></table></div></section>`;
+    <div class="tbl tall"><table><thead><tr><th>Cuenta</th><th>Tienda y promotores</th><th class="num">TAM</th><th class="num">Share hist.</th><th class="num">Share obj.</th><th class="num">Meta</th><th class="num">Base</th><th class="num">Medio</th><th class="num">Alto</th><th class="num">${comp ? esc(comp.nombre) : 'Comp.'}</th><th class="num" title="Variación de la meta por semana: cada período se divide por sus semanas de ciclo">Δ / sem</th><th>Notas</th></tr></thead><tbody>${detRows || '<tr><td colspan="12" class="empty">Sin resultados.</td></tr>'}</tbody></table></div></section>`;
 }
 function panelOverrides(){
   const b = S.base, w = S.work, filas = S.metas.filas, tn = (id) => (filas.find(f => String(f.tienda_id) === String(id)) || {});
