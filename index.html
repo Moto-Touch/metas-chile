@@ -379,7 +379,7 @@ function actConfirmarMetas(){
 }
 
 // ---------- importación de la Base de trabajo ----------
-const COLS = {codigo:['código tienda','codigo tienda'], tipo:['tipo nov','tipo dic','tipo ene','tipo feb','tipo mar','tipo abr','tipo may','tipo jun','tipo jul','tipo ago','tipo sep','tipo oct','tipo'], tam:['tam nov proyectado','tam dic proyectado','tam ene proyectado','tam feb proyectado','tam mar proyectado','tam abr proyectado','tam may proyectado','tam jun proyectado','tam jul proyectado','tam ago proyectado','tam sep proyectado','tam oct proyectado','tam proyectado'], meta:['meta nov','meta dic','meta ene','meta feb','meta mar','meta abr','meta may','meta jun','meta jul','meta ago','meta sep','meta oct','meta total'], base:['meta base'], medio:['meta medio'], alto:['meta alta','meta alto'], share:['share esperado'], cadena:['cadena'], tienda:['tienda'], supervisor:['supervisor'], zona:['zona'], merchandiser:['merchandiser'], ingram:['ingram (encargado)','ingram'], cluster:['cluster']};
+const COLS = {codigo:['código tienda','codigo tienda'], tipo:['tipo nov','tipo dic','tipo ene','tipo feb','tipo mar','tipo abr','tipo may','tipo jun','tipo jul','tipo ago','tipo sep','tipo oct','tipo'], tam:['tam nov proyectado','tam dic proyectado','tam ene proyectado','tam feb proyectado','tam mar proyectado','tam abr proyectado','tam may proyectado','tam jun proyectado','tam jul proyectado','tam ago proyectado','tam sep proyectado','tam oct proyectado','tam proyectado'], meta:['meta nov','meta dic','meta ene','meta feb','meta mar','meta abr','meta may','meta jun','meta jul','meta ago','meta sep','meta oct','meta total'], base:['meta base'], medio:['meta medio'], alto:['meta alta','meta alto'], share:['share esperado','share objetivo'], cadena:['cadena'], tienda:['tienda'], supervisor:['supervisor'], zona:['zona'], merchandiser:['merchandiser'], ingram:['ingram (encargado)','ingram'], cluster:['cluster']};
 const TIPO_LBL = {con_promotor:'Con promotor', supervisor:'Sin promotor · supervisor', otras:'Otras (merchandiser / INGRAM)'};
 const PER_MES = {Enero:'ene',Febrero:'feb',Marzo:'mar',Abril:'abr',Mayo:'may',Junio:'jun',Julio:'jul',Agosto:'ago',Septiembre:'sep',Octubre:'oct',Noviembre:'nov',Diciembre:'dic'};
 function readBase(file){
@@ -396,7 +396,7 @@ function readBase(file){
     const out = [];
     for (const r of rows.slice(hi + 1)) { if (!r || !r[idx.codigo]) continue;
       const t = String(g(r, 'tipo') ?? '').toLowerCase();
-      const tipo = tipoFijo || (t.includes('con promotor') ? 'con_promotor' : t.includes('sin promotor') ? 'supervisor' : t ? 'supervisor' : 'con_promotor');
+      const tipo = tipoFijo || (t.includes('otras') ? 'otras' : t.includes('con promotor') ? 'con_promotor' : t.includes('sin promotor') ? 'supervisor' : t ? 'supervisor' : 'con_promotor');
       out.push({codigo:String(r[idx.codigo]).trim(), tipo, cadena: g(r,'cadena'), tienda: g(r,'tienda'), tam: N(g(r,'tam')), meta: N(g(r,'meta')), base: N(g(r,'base')), medio: N(g(r,'medio')), alto: N(g(r,'alto')), share: N(g(r,'share')),
         supervisor: g(r,'supervisor'), zona: g(r,'zona'), merchandiser: g(r,'merchandiser'), ingram: g(r,'ingram'), cluster: g(r,'cluster')}); }
     return out;
@@ -405,13 +405,22 @@ function readBase(file){
     const fr = new FileReader();
     fr.onload = () => { try {
       const wb = XLSX.read(fr.result, {type:'array'});
-      const base = wb.SheetNames.find(n => n.toLowerCase().trim() === 'base tiendas'), otras = wb.SheetNames.find(n => n.toLowerCase().trim() === 'otras tiendas');
-      if (!base) throw new Error('El archivo no tiene la hoja "Base Tiendas"');
-      let filas = leerHoja(wb, base, null);
-      const vistos = new Set(filas.map(f => f.codigo));
-      if (otras) for (const f of leerHoja(wb, otras, 'otras')) if (!vistos.has(f.codigo)) { filas.push(f); vistos.add(f.codigo); }
+      const hoja = (n) => wb.SheetNames.find(s => s.toLowerCase().trim() === n);
+      const base = hoja('base tiendas'), otras = hoja('otras tiendas'), propia = hoja('tiendas');
+      let filas, formato;
+      if (base) {
+        formato = 'Base de trabajo Touch';
+        filas = leerHoja(wb, base, null);
+        const vistos = new Set(filas.map(f => f.codigo));
+        if (otras) for (const f of leerHoja(wb, otras, 'otras')) if (!vistos.has(f.codigo)) { filas.push(f); vistos.add(f.codigo); }
+      } else if (propia) {
+        formato = 'Excel exportado desde esta herramienta';
+        filas = leerHoja(wb, propia, null);
+        const dup = filas.length - new Set(filas.map(f => f.codigo)).size; if (dup) throw new Error(`La hoja Tiendas tiene ${dup} códigos repetidos; deja una fila por tienda.`);
+      } else throw new Error('No reconozco el archivo: debe tener la hoja "Base Tiendas" (Base de trabajo Touch) o la hoja "Tiendas" (exportada desde aquí).');
+      const malas = filas.filter(f => f.meta != null && Math.abs((f.base||0) + (f.medio||0) + (f.alto||0) - f.meta) > 1).length;
       const porTipo = {}; for (const f of filas) { const p = porTipo[f.tipo] = porTipo[f.tipo] || {n:0, u:0}; p.n++; p.u += f.meta || 0; }
-      res({hoja: base + (otras ? ' + ' + otras : ''), filas, porTipo});
+      res({hoja: base ? base + (otras ? ' + ' + otras : '') : propia, formato, filas, porTipo, malas});
     } catch(e) { rej(e); } };
     fr.onerror = () => rej(new Error('No se pudo leer el archivo'));
     fr.readAsArrayBuffer(file);
@@ -420,7 +429,7 @@ function readBase(file){
 function actImportar(prev){
   const tot = prev.filas.reduce((s, f) => s + (f.meta || 0), 0);
   const desglose = Object.entries(prev.porTipo || {}).map(([t, p]) => `${TIPO_LBL[t] || t}: ${p.n} tiendas · ${fN(p.u)} u`).join(' · ');
-  openModal({title:`Importar ${prev.filas.length} tiendas a ${perLbl(S.periodo)}`, intro:`Hojas <b>${esc(prev.hoja)}</b>: ${esc(fN(tot))} unidades de meta. ${esc(desglose)}. Las tiendas se cruzan por código (id_local, con variantes Movistar/Hites). Cada meta queda marcada por tipo (con promotor / supervisor / otras) y se guarda la asignación de supervisor, zona y merchandiser del período. Las metas quedan en TRADE como <b>importada_base_touch</b>, en borrador; las importadas antes del mismo tipo que ya no vengan en el archivo se quitan.`, needMotivo: true, confirmLbl:'Importar',
+  openModal({title:`Importar ${prev.filas.length} tiendas a ${perLbl(S.periodo)}`, intro:`<b>${esc(prev.formato)}</b> · hoja ${esc(prev.hoja)}: ${esc(fN(tot))} unidades de meta. ${esc(desglose)}.${prev.malas ? ` <b>Ojo:</b> en ${prev.malas} tiendas Base + Medio + Alto no suma la meta total.` : ''} Las tiendas se cruzan por código (id_local, con variantes Movistar/Hites). Cada meta queda marcada por tipo (con promotor / supervisor / otras) y se guarda la asignación de supervisor, zona y merchandiser del período. Las metas quedan en TRADE como <b>importada_base_touch</b>, en borrador; las importadas antes del mismo tipo que ya no vengan en el archivo se quitan.`, needMotivo: true, confirmLbl:'Importar',
     onConfirm: async (motivo) => { const r = await rpc('app_importar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_filas: prev.filas, p_motivo: motivo}); toast(r ? `Importadas ${r.importadas}; sin tienda ${r.sin_tienda}; sin cobertura ${r.sin_cobertura}` : 'Importación hecha'); S.importPrev = null; if (r && r.sin_tienda) S.importAviso = `Códigos sin tienda en TRADE: ${r.codigos_sin_match}`; await Promise.all([loadMetas(), loadCheck()]); render(); }});
 }
 
@@ -790,9 +799,9 @@ function viewMetas(){
   </section>
   ${RO() ? '' : `<section class="panel"><div class="panel-head"><h2>Cargar metas</h2></div>
     <div class="two">
-      <div class="box"><h3>Importar Base de trabajo (Touch)</h3><p class="hint">Sube el .xlsx de la Base de trabajo. Se leen <b>Base Tiendas</b> (con promotor y sin promotor de supervisor) y <b>Otras tiendas</b> (merchandiser / INGRAM): código, TAM, meta, tramos y asignación. Las metas quedan en TRADE como importadas, en borrador, marcadas por tipo.</p>
+      <div class="box"><h3>Importar metas desde Excel</h3><p class="hint">Acepta dos formatos y los reconoce solo: <b>1)</b> el Excel que descargas desde aquí (hoja <b>Tiendas</b>): edítalo y vuelve a subirlo; <b>2)</b> la Base de trabajo de Touch (hojas <b>Base Tiendas</b> y <b>Otras tiendas</b>), con el formato anterior. Se leen código, tipo, TAM, meta, tramos y asignación. Las metas quedan en TRADE como importadas, en borrador. Las tiendas de un tipo que ya tenían meta importada y no vienen en el archivo se quitan: no borres filas si quieres conservarlas.</p>
         <input type="file" id="f-xlsx" accept=".xlsx,.xlsm">
-        ${prev ? `<div class="banner acc"><p>${prev.filas.length} tiendas leídas (${esc(prev.hoja)}) · ${esc(fN(prev.filas.reduce((s,f)=>s+(f.meta||0),0)))} u · ${esc(Object.entries(prev.porTipo||{}).map(([t,p]) => `${TIPO_LBL[t]||t} ${p.n}`).join(' · '))}</p><button class="primary" id="b-import">Revisar e importar</button></div>` : ''}${S.importError ? `<div class="banner bad"><p>${esc(S.importError)}</p></div>` : ''}</div>
+        ${prev ? `<div class="banner acc"><p><b>${esc(prev.formato)}</b> · ${prev.filas.length} tiendas leídas (${esc(prev.hoja)}) · ${esc(fN(prev.filas.reduce((s,f)=>s+(f.meta||0),0)))} u · ${esc(Object.entries(prev.porTipo||{}).map(([t,p]) => `${TIPO_LBL[t]||t} ${p.n}`).join(' · '))}</p><button class="primary" id="b-import">Revisar e importar</button></div>` : ''}${S.importError ? `<div class="banner bad"><p>${esc(S.importError)}</p></div>` : ''}</div>
       <div class="box"><h3>Generar con el motor de TRADE</h3><p class="hint">Calcula desde TAM, share y cobertura con las reglas que el motor ya aplica. Útil para comparar contra la base importada; para Noviembre la fuente es la Base de Touch.</p>
         <div class="ctrl"><label class="lbl" for="in-margen">Margen</label><input type="number" id="in-margen" step="0.5" min="0" max="20" value="${toPctInput(S.margen)}" style="width:80px"><span class="muted">pp</span><button id="b-generar">Generar</button><button id="b-confirmar" ${conMeta.length?'':'disabled'}>Confirmar metas</button></div></div>
     </div></section>`}
@@ -904,7 +913,7 @@ function bind(tab){
     const im = $('#in-margen'); if (im) im.onchange = (e) => { S.margen = fromPctInput(e.target.value) || 0; };
     const bx = $('#b-xls'); if (bx) bx.onclick = exportMetas;
     const bg = $('#b-generar'); if (bg) bg.onclick = actGenerar; const bcf = $('#b-confirmar'); if (bcf) bcf.onclick = actConfirmarMetas;
-    const fx = $('#f-xlsx'); if (fx) fx.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; S.importError = null; S.importAviso = null; try { if (typeof XLSX === 'undefined') throw new Error('La librería de Excel no cargó; recarga la página.'); S.importPrev = await readBase(f); if (!S.importPrev.filas.length) throw new Error('No encontré filas con promotor en la hoja.'); } catch(err) { S.importPrev = null; S.importError = err.message || String(err); } renderMain(); };
+    const fx = $('#f-xlsx'); if (fx) fx.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; S.importError = null; S.importAviso = null; try { if (typeof XLSX === 'undefined') throw new Error('La librería de Excel no cargó; recarga la página.'); S.importPrev = await readBase(f); if (!S.importPrev.filas.length) throw new Error('No encontré tiendas con meta en el archivo.'); } catch(err) { S.importPrev = null; S.importError = err.message || String(err); } renderMain(); };
     const bi = $('#b-import'); if (bi) bi.onclick = () => actImportar(S.importPrev);
     on('[data-ovr]', 'change', (e) => { const [k, id] = e.target.dataset.ovr.split('|'); const o = S.work[k][id]; if (e.target.dataset.f === 'valor') o.valor = e.target.value === '' ? null : +e.target.value; else o.motivo = e.target.value; changed(); });
     on('[data-del-ovr]', 'click', (e) => { const [k, id] = e.target.dataset.delOvr.split('|'); if ((S.base[k]||{})[id]) S.work[k][id] = null; else delete S.work[k][id]; changed(); });
