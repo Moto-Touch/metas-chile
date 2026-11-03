@@ -441,6 +441,44 @@ function actImportar(prev){
     onConfirm: async (motivo) => { const r = await rpc('app_importar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_filas: prev.filas, p_motivo: motivo}); toast(r ? `Importadas ${r.importadas}; sin tienda ${r.sin_tienda}; sin cobertura ${r.sin_cobertura}` : 'Importación hecha'); S.importPrev = null; if (r && r.sin_tienda) S.importAviso = `Códigos sin tienda en TRADE: ${r.codigos_sin_match}`; await Promise.all([loadMetas(), loadCheck()]); render(); }});
 }
 
+// ---------- actualizar TAM desde archivo ----------
+function cargarTam(file){
+  return new Promise((res, rej) => {
+    if (typeof XLSX === 'undefined') { rej(new Error('La librería de Excel no cargó; recarga la página.')); return; }
+    const fr = new FileReader();
+    fr.onload = () => { try {
+      const wb = XLSX.read(fr.result, {type:'array'});
+      const norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+      let hoja = null, hi = -1, hdr = null;
+      for (const n of [wb.SheetNames.find(s => norm(s) === 'tiendas'), ...wb.SheetNames].filter(Boolean)) { const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, defval:null}); const i = rows.findIndex(r => r && r.some(c => /^(codigo tienda|codigo|id_local|cod\. tienda|cod tienda)$/.test(norm(c))) && r.some(c => /^tam/.test(norm(c)))); if (i >= 0) { hoja = {n, rows}; hi = i; hdr = rows[i].map(norm); break; } }
+      if (!hoja) throw new Error('No encontré una hoja con columnas "Código tienda" y "TAM".');
+      const iCod = hdr.findIndex(c => /^(codigo tienda|codigo|id_local|cod\. tienda|cod tienda)$/.test(c)), iCad = hdr.findIndex(c => c === 'cadena' || c === 'cuenta');
+      const tamCols = hdr.map((c, i) => [c, i]).filter(([c]) => /^tam/.test(c));
+      const pref = tamCols.find(([c]) => /proyect/.test(c) && /(nov|dic|ene|feb|mar|abr|may|jun|jul|ago|sep|oct)/.test(c)) || tamCols.find(([c]) => c === 'tam') || tamCols.find(([c]) => !/ref/.test(c)) || tamCols[0];
+      const iTam = pref[1], semanal = /semanal/.test(pref[0]), ns = nSem(S.periodo) || 4;
+      const filas = S.metas.filas.filter(f => N(f.meta_total) != null), byCod = new Map(filas.map(f => [norm(f.id_local), f])), bySuf = new Map();
+      for (const f of filas) { const s = norm(String(f.id_local).split('::').pop()); bySuf.set(s, bySuf.has(s) ? null : f); }
+      let ok = 0, igual = 0, sinMeta = [], sinTam = 0; S.work.mt = S.work.mt || {};
+      for (const r of hoja.rows.slice(hi + 1)) { if (!r || r[iCod] == null || r[iCod] === '') continue;
+        const cod = norm(r[iCod]), cad = iCad >= 0 ? norm(r[iCad]) : '';
+        const f = byCod.get(cod) || (cad ? byCod.get(cad + '::' + cod) || byCod.get(cad + '::cl25_' + cod) : null) || bySuf.get(cod.split('::').pop()) || byCod.get(cod.replace(/\.0$/, ''));
+        let t = N(r[iTam]); if (t == null) { sinTam++; continue; } if (!f) { sinMeta.push(String(r[iCod])); continue; }
+        if (semanal) t = t * ns; t = Math.round(t * 10) / 10;
+        const id = String(f.tienda_id), x = mtBase(id), cur = mtCur(id); if (!x) continue;
+        if (cur.tam != null && Math.abs(cur.tam - t) < 0.05) { igual++; continue; }
+        const tot0 = cur.b + cur.m + cur.a, ratio = cur.tam ? tot0 / cur.tam : N(f.share_obj);
+        let y; if (ratio == null) y = Object.assign({}, cur, {tam: t}); else { const [b, m, a] = repartir(Math.round(t * ratio), [cur.b, cur.m, cur.a]); y = {tam: t, b, m, a}; }
+        if (same(x, y)) delete S.work.mt[id]; else S.work.mt[id] = y; ok++; }
+      const partes = [`<b>${ok}</b> tiendas con TAM nuevo pasaron al borrador (hoja ${esc(hoja.n)}, columna <i>${esc(pref[0])}</i>${semanal ? ` × ${ns} semanas` : ''})`];
+      if (igual) partes.push(`${igual} ya tenían ese TAM`); if (sinTam) partes.push(`${sinTam} filas sin TAM`);
+      if (sinMeta.length) partes.push(`${sinMeta.length} códigos sin meta en ${esc(perLbl(S.periodo))}: ${esc(sinMeta.slice(0, 12).join(', '))}${sinMeta.length > 12 ? '…' : ''}`);
+      res({bad: !ok, txt: partes.join(' · ') + (ok ? '. Revisa el detalle y usa <b>Revisar y aplicar</b>.' : '.')});
+    } catch(e) { rej(e); } };
+    fr.onerror = () => rej(new Error('No se pudo leer el archivo'));
+    fr.readAsArrayBuffer(file);
+  });
+}
+
 // ---------- exportar metas a Excel ----------
 function exportMetas(){
   if (typeof XLSX === 'undefined') { toast('La librería de Excel no cargó; recarga la página.'); return; }
@@ -810,6 +848,9 @@ function viewMetas(){
       <div class="box"><h3>Importar metas desde Excel</h3><p class="hint">Acepta dos formatos y los reconoce solo: <b>1)</b> el Excel que descargas desde aquí (hoja <b>Tiendas</b>): edítalo y vuelve a subirlo; <b>2)</b> la Base de trabajo de Touch (hojas <b>Base Tiendas</b> y <b>Otras tiendas</b>), con el formato anterior. Se leen código, tipo, TAM, meta, tramos y asignación. Las metas quedan en TRADE como importadas, en borrador. Las tiendas de un tipo que ya tenían meta importada y no vienen en el archivo se quitan: no borres filas si quieres conservarlas.</p>
         <input type="file" id="f-xlsx" accept=".xlsx,.xlsm">
         ${prev ? `<div class="banner acc"><p><b>${esc(prev.formato)}</b> · ${prev.filas.length} tiendas leídas (${esc(prev.hoja)}) · ${esc(fN(prev.filas.reduce((s,f)=>s+(f.meta||0),0)))} u · ${esc(Object.entries(prev.porTipo||{}).map(([t,p]) => `${TIPO_LBL[t]||t} ${p.n}`).join(' · '))}</p><button class="primary" id="b-import">Revisar e importar</button></div>` : ''}${S.importError ? `<div class="banner bad"><p>${esc(S.importError)}</p></div>` : ''}</div>
+      <div class="box"><h3>Actualizar TAM desde archivo</h3><p class="hint">Sube un .xlsx o .csv con <b>Código tienda</b> (como en el Excel exportado, p. ej. <i>Claro::J122</i>; o el código solo más una columna <b>Cadena</b>) y <b>TAM</b> del ciclo. Si la columna dice <i>semanal</i>, se multiplica por las semanas del ciclo. Cada meta se recalcula con su mismo share objetivo y se reparte entre tramos en la misma proporción. No toca portafolio ni excepciones. Queda en el borrador para revisar y aplicar.</p>
+        <input type="file" id="f-tam" accept=".xlsx,.xlsm,.csv">
+        ${S.tamAviso ? `<div class="banner ${S.tamAviso.bad ? 'bad' : 'acc'}"><p>${S.tamAviso.txt}</p></div>` : ''}</div>
       <div class="box"><h3>Generar con el motor de TRADE</h3><p class="hint">Calcula desde TAM, share y cobertura con las reglas que el motor ya aplica. Útil para comparar contra la base importada; para Noviembre la fuente es la Base de Touch.</p>
         <div class="ctrl"><label class="lbl" for="in-margen">Margen</label><input type="number" id="in-margen" step="0.5" min="0" max="20" value="${toPctInput(S.margen)}" style="width:80px"><span class="muted">pp</span><button id="b-generar">Generar</button><button id="b-confirmar" ${conMeta.length?'':'disabled'}>Confirmar metas</button></div></div>
     </div></section>`}
@@ -935,6 +976,7 @@ function bind(tab){
     const im = $('#in-margen'); if (im) im.onchange = (e) => { S.margen = fromPctInput(e.target.value) || 0; };
     const bx = $('#b-xls'); if (bx) bx.onclick = exportMetas;
     const bg = $('#b-generar'); if (bg) bg.onclick = actGenerar; const bcf = $('#b-confirmar'); if (bcf) bcf.onclick = actConfirmarMetas;
+    const ft2 = $('#f-tam'); if (ft2) ft2.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; try { S.tamAviso = await cargarTam(f); } catch(err) { S.tamAviso = {bad: true, txt: esc(err.message || String(err))}; } changed(); };
     const fx = $('#f-xlsx'); if (fx) fx.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; S.importError = null; S.importAviso = null; try { if (typeof XLSX === 'undefined') throw new Error('La librería de Excel no cargó; recarga la página.'); S.importPrev = await readBase(f); if (!S.importPrev.filas.length) throw new Error('No encontré tiendas con meta en el archivo.'); } catch(err) { S.importPrev = null; S.importError = err.message || String(err); } renderMain(); };
     const bi = $('#b-import'); if (bi) bi.onclick = () => actImportar(S.importPrev);
     on('[data-ovr]', 'change', (e) => { const [k, id] = e.target.dataset.ovr.split('|'); const o = S.work[k][id]; if (e.target.dataset.f === 'valor') o.valor = e.target.value === '' ? null : +e.target.value; else o.motivo = e.target.value; changed(); });
@@ -944,7 +986,7 @@ function bind(tab){
   }
   if (tab === 'checklist') { const br = $('#b-recheck'); if (br) br.onclick = async () => { S.busy = true; renderHeader(); await loadCheck(); S.busy = false; render(); }; }
 }
-$('#sel-periodo').addEventListener('change', (e) => { const [a, n] = e.target.value.split('|'); S.periodo = {anio: +a, nombre: n}; store('periodo', S.periodo); S.compPeriodo = null; S.metas = null; S.check = null; S.importPrev = null; S.importAviso = null; loadAll(true); });
+$('#sel-periodo').addEventListener('change', (e) => { const [a, n] = e.target.value.split('|'); S.periodo = {anio: +a, nombre: n}; store('periodo', S.periodo); S.compPeriodo = null; S.metas = null; S.check = null; S.importPrev = null; S.importAviso = null; S.tamAviso = null; loadAll(true); });
 window.addEventListener('hashchange', () => { renderTabs(); renderMain(); });
 
 function renderLogin(){
