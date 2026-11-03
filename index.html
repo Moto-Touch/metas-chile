@@ -424,6 +424,41 @@ function actImportar(prev){
     onConfirm: async (motivo) => { const r = await rpc('app_importar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_filas: prev.filas, p_motivo: motivo}); toast(r ? `Importadas ${r.importadas}; sin tienda ${r.sin_tienda}; sin cobertura ${r.sin_cobertura}` : 'Importación hecha'); S.importPrev = null; if (r && r.sin_tienda) S.importAviso = `Códigos sin tienda en TRADE: ${r.codigos_sin_match}`; await Promise.all([loadMetas(), loadCheck()]); render(); }});
 }
 
+// ---------- exportar metas a Excel ----------
+function exportMetas(){
+  if (typeof XLSX === 'undefined') { toast('La librería de Excel no cargó; recarga la página.'); return; }
+  const filas = (S.metas && S.metas.filas) || [], per = perInfo(S.periodo), ns = nSem(S.periodo) || null;
+  const r0 = (v) => { const n = N(v); return n == null ? null : Math.round(n); };
+  const pc = (v) => { const n = N(v); return n == null ? null : Math.round(n * 1000) / 1000; };
+  const tl = (t) => TIPO_LBL[t || 'con_promotor'] || t;
+  const orden = {con_promotor: 0, supervisor: 1, otras: 2};
+  const fs = filas.filter(f => N(f.meta_total) != null).sort((a, b) => (orden[a.tipo||'con_promotor'] - orden[b.tipo||'con_promotor']) || String(a.cuenta).localeCompare(b.cuenta) || String(a.tienda).localeCompare(b.tienda));
+  const det = fs.map(f => ({
+    'Tipo': tl(f.tipo), 'Cuenta': f.cuenta, 'Código tienda': f.id_local, 'Tienda': f.tienda,
+    'Supervisor': f.supervisor || '', 'Zona': f.zona || '', 'Merchandiser': f.merchandiser || '', 'INGRAM': f.ingram || '', 'Cluster': f.cluster || '',
+    'Promotores vigentes': f.promotores || '', 'TAM': r0(f.tam), 'Share histórico': pc(f.share_hist), 'Share objetivo': pc(f.share_obj),
+    'Meta total': r0(f.meta_total), 'Meta Base': r0(f.meta_base), 'Meta Medio': r0(f.meta_medio), 'Meta Alto': r0(f.meta_alto),
+    'Meta semanal': ns ? Math.round((N(f.meta_total) || 0) / ns * 10) / 10 : null,
+    'Método': f.metodo_meta === 'importada_base_touch' ? 'Importada Base Touch' : (f.metodo_meta || ''), 'Estado': f.estado || '',
+    'Sin cobertura en TRADE': (f.tipo || 'con_promotor') === 'con_promotor' && f.n_cob === 0 ? 'Sí' : ''
+  }));
+  const agg = (keyFn, cols) => { const m = new Map(); for (const f of fs) { const k = keyFn(f); if (k == null) continue; const a = m.get(k) || {n:0, t:0, b:0, me:0, al:0}; a.n++; a.t += N(f.meta_total)||0; a.b += N(f.meta_base)||0; a.me += N(f.meta_medio)||0; a.al += N(f.meta_alto)||0; m.set(k, a); } return [...m.entries()].map(([k, a]) => Object.assign(cols(k), {'Tiendas': a.n, 'Meta total': Math.round(a.t), 'Meta Base': Math.round(a.b), 'Meta Medio': Math.round(a.me), 'Meta Alto': Math.round(a.al), '% Alto': a.t ? Math.round(a.al / a.t * 1000) / 1000 : null, 'Meta semanal': ns ? Math.round(a.t / ns) : null})); };
+  const resCuenta = agg(f => (f.tipo||'con_promotor') + '|' + f.cuenta, k => { const [t, c] = k.split('|'); return {'Tipo': tl(t), 'Cuenta': c}; }).sort((a, b) => a.Tipo.localeCompare(b.Tipo) || a.Cuenta.localeCompare(b.Cuenta));
+  const sup = new Map(); for (const f of fs) { const t = f.tipo || 'con_promotor'; if (t === 'otras') continue; const k = f.supervisor || '(sin supervisor)'; const s = sup.get(k) || {zona: f.zona || '', cp:0, mcp:0, sp:0, msp:0}; if (!s.zona && f.zona) s.zona = f.zona; if (t === 'con_promotor') { s.cp++; s.mcp += N(f.meta_total)||0; } else { s.sp++; s.msp += N(f.meta_total)||0; } sup.set(k, s); }
+  const resSup = [...sup.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, s]) => ({'Supervisor': k, 'Zona': s.zona, 'Tiendas con promotor': s.cp, 'Meta con promotor': Math.round(s.mcp), 'Tiendas sin promotor': s.sp, 'Meta sin promotor': Math.round(s.msp), 'Meta zona': Math.round(s.mcp + s.msp), 'Meta zona semanal': ns ? Math.round((s.mcp + s.msp) / ns) : null}));
+  const info = [['Metas ' + perLbl(S.periodo)], ['Ciclo', cicloTxt(S.periodo)], ['Semanas', ns], ['Tiendas con meta', fs.length],
+    ...['con_promotor','supervisor','otras'].map(t => { const x = fs.filter(f => (f.tipo||'con_promotor') === t); return [tl(t), x.length + ' tiendas', Math.round(x.reduce((s, f) => s + (N(f.meta_total)||0), 0)) + ' u']; }),
+    ['Fuente', 'TRADE (meta_promotor_mensual) · exportado ' + new Date().toLocaleString('es-CL')], ['Nota', 'Base solo suma al Gate; Medio y Alto pagan. Las tiendas "Otras" no suman a supervisores ni al variable.']];
+  const wb = XLSX.utils.book_new();
+  const sh = (rows, widths) => { const ws = XLSX.utils.json_to_sheet(rows); ws['!cols'] = widths.map(w => ({wch: w})); if (rows.length) ws['!autofilter'] = {ref: ws['!ref']}; return ws; };
+  XLSX.utils.book_append_sheet(wb, sh(det, [24,11,20,32,28,18,26,18,7,40,8,9,9,9,8,8,8,9,20,10,10]), 'Tiendas');
+  XLSX.utils.book_append_sheet(wb, sh(resCuenta, [26,12,8,10,9,9,9,7,10]), 'Resumen por cuenta');
+  XLSX.utils.book_append_sheet(wb, sh(resSup, [32,20,10,10,10,10,10,10]), 'Supervisores');
+  const wi = XLSX.utils.aoa_to_sheet(info); wi['!cols'] = [{wch: 30}, {wch: 60}, {wch: 12}]; XLSX.utils.book_append_sheet(wb, wi, 'Info');
+  XLSX.writeFile(wb, `Metas_${S.periodo.nombre}_${S.periodo.anio}.xlsx`);
+  toast(`Excel con ${fs.length} tiendas descargado`);
+}
+
 // ---------- render ----------
 function render(){ renderHeader(); renderTabs(); renderMain(); }
 function renderHeader(){
@@ -748,7 +783,7 @@ function viewMetas(){
   const cuentas = [...new Set(filas.map(f => f.cuenta))];
   const prev = S.importPrev;
   const tipoSel = `<label class="lbl" for="f-tipo">Tiendas</label><select id="f-tipo">${['con_promotor','supervisor','otras','todas'].map(t => `<option value="${t}" ${ft===t?'selected':''}>${t === 'todas' ? 'Todas' : TIPO_LBL[t]}${nTipo[t] ? ` (${nTipo[t].n})` : t === 'todas' ? ` (${todas.length})` : ''}</option>`).join('')}</select>`;
-  return `<section class="panel"><div class="panel-head"><h2>Metas de ${esc(perLbl(S.periodo))}</h2><div class="ctrl">${tipoSel}<label class="lbl" for="sel-comp">Comparar con</label><select id="sel-comp"><option value="">Sin comparación</option>${compOpts}</select></div></div>
+  return `<section class="panel"><div class="panel-head"><h2>Metas de ${esc(perLbl(S.periodo))}</h2><div class="ctrl"><button id="b-xls" ${todas.some(f => N(f.meta_total) != null) ? '' : 'disabled'} title="Todas las tiendas del período, con resumen por cuenta y por supervisor">Descargar Excel</button>${tipoSel}<label class="lbl" for="sel-comp">Comparar con</label><select id="sel-comp"><option value="">Sin comparación</option>${compOpts}</select></div></div>
     <div class="statgrid"><div class="stat"><b>${ft === 'con_promotor' ? conCob.length : filas.length}</b><span>${ft === 'con_promotor' ? 'tiendas con cobertura vigente' : 'tiendas ' + (TIPO_LBL[ft] || 'en total').toLowerCase()}</span></div><div class="stat"><b>${conMeta.length}</b><span>con meta ${metodos.length ? '· ' + esc(metodos.map(m => m === 'importada_base_touch' ? 'importada' : m).join(', ')) : ''}${estados.length ? ' · ' + esc(estados.join(', ')) : ''}</span></div><div class="stat"><b>${fN(tot('meta_total', filas))}</b><span>unidades de meta total${sA ? ` · ${fN(tot('meta_total', filas) / sA)} por semana (${sA} sem)` : ''}</span></div><div class="stat"><b>${comp ? fN(totComp) : '—'}</b><span>${comp ? 'meta de ' + esc(perLbl(comp)) + ' en esas tiendas' + (sB ? ` · ${fN(totComp / sB)} por semana (${sB} sem)` : '') : 'sin comparación'}</span></div></div>
     ${!conMeta.length ? `<div class="banner warn"><p>${esc(perLbl(S.periodo))} todavía no tiene metas en TRADE. Importa la Base de trabajo de Touch o genera con el motor de TRADE.</p></div>` : ''}
     ${S.importAviso ? `<div class="banner warn"><p>${esc(S.importAviso)}</p></div>` : ''}
@@ -867,6 +902,7 @@ function bind(tab){
     const fti = $('#f-tipo'); if (fti) fti.onchange = (e) => { S.metasFiltro.tipo = e.target.value; renderMain(); };
     const fq = $('#f-q'); if (fq) fq.onchange = (e) => { S.metasFiltro.q = e.target.value; renderMain(); };
     const im = $('#in-margen'); if (im) im.onchange = (e) => { S.margen = fromPctInput(e.target.value) || 0; };
+    const bx = $('#b-xls'); if (bx) bx.onclick = exportMetas;
     const bg = $('#b-generar'); if (bg) bg.onclick = actGenerar; const bcf = $('#b-confirmar'); if (bcf) bcf.onclick = actConfirmarMetas;
     const fx = $('#f-xlsx'); if (fx) fx.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; S.importError = null; S.importAviso = null; try { if (typeof XLSX === 'undefined') throw new Error('La librería de Excel no cargó; recarga la página.'); S.importPrev = await readBase(f); if (!S.importPrev.filas.length) throw new Error('No encontré filas con promotor en la hoja.'); } catch(err) { S.importPrev = null; S.importError = err.message || String(err); } renderMain(); };
     const bi = $('#b-import'); if (bi) bi.onclick = () => actImportar(S.importPrev);
