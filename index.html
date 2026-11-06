@@ -918,7 +918,14 @@ function viewLog(){
 }
 
 // ---------- eventos ----------
-function changed(){ saveDraft(); renderHeader(); renderMain(); }
+function changed(){ saveDraft(); renderHeader(); setTimeout(renderMainKeep, 0); }
+// Re-renderiza el contenido sin que la página salte: conserva el scroll y devuelve el foco al mismo campo (o al que el usuario acababa de enfocar con Tab).
+function renderMainKeep(){
+  const y = window.scrollY, ae = document.activeElement, d = ae && ae.dataset ? ae.dataset : null;
+  const sel = d && d.mt ? `[data-mt="${d.mt}"]` : d && d.ovr ? `[data-ovr="${d.ovr}"][data-f="${d.f}"]` : ae && ae.id ? '#' + ae.id : null;
+  renderMain(); window.scrollTo(0, y);
+  if (sel) { const el = document.querySelector(sel); if (el && el !== document.body) { el.focus({preventScroll: true}); if (el.select) el.select(); } }
+}
 function readFld(el, kind){ return kind === 'pct' ? fromPctInput(el.value) : kind === 'int' ? (el.value === '' ? null : Math.round(+el.value)) : kind === 'num' ? (el.value === '' ? null : +el.value) : kind === 'bool' ? (el.value === '' ? null : el.value === 'true') : el.value; }
 function bind(tab){
   const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
