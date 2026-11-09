@@ -590,7 +590,7 @@ function viewCobMapa(){
     <div class="ctrl"><label class="lbl" for="cob-cuenta">Cuenta</label><select id="cob-cuenta"><option value="">Todas</option>${cuentas.map(c => `<option ${f.cuenta===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
       <label class="lbl" for="cob-estado">Ver</label><select id="cob-estado"><option value="">Todo</option><option value="vacante" ${f.estado==='vacante'?'selected':''}>Vacantes</option><option value="ruta" ${f.estado==='ruta'?'selected':''}>Rutas</option><option value="sinpar" ${f.estado==='sinpar'?'selected':''}>Rutas sin par</option><option value="doble" ${f.estado==='doble'?'selected':''}>Doble cobertura</option><option value="pt" ${f.estado==='pt'?'selected':''}>Part time</option><option value="supdif" ${f.estado==='supdif'?'selected':''}>Supervisor cambió</option></select>
       <input id="cob-q" placeholder="Buscar tienda, persona, supervisor…" value="${esc(f.q)}" style="min-width:240px">
-      <span class="grow"></span>${ro ? '' : '<button data-ev="alta">+ Alta</button><button data-ev="vacante_abre">+ Abrir vacante</button>'}</div>
+      <span class="grow"></span>${ro ? '' : '<button data-ev="alta">+ Alta</button><button data-ev="vacante_abre">+ Abrir vacante</button><button id="cob-persona">+ Persona</button>'}</div>
     <div class="tbl tall"><table><thead><tr><th>Cuenta</th><th>Tienda</th><th>Persona</th><th>Modalidad</th><th>Jornada</th><th class="num">Cupo</th><th>Supervisor</th><th>Desde</th><th></th>${ro ? '' : '<th>Acciones</th>'}</tr></thead><tbody>
     ${rows.map(r => `<tr class="${r.vac ? 'vac' : ''}"><td>${esc(r.cuenta)}</td><td>${esc(r.tienda)}</td><td>${esc(r.persona)}${r.rut_norm ? '' : ''}</td><td>${esc(r.tipo_cobertura || '—')}</td><td>${esc(r.jornada || '—')}</td><td class="num">${nf1.format(+r.cupo_valor || 0)}</td><td class="muted" title="${esc(r.vac ? 'Supervisor de la tienda en ' + perLbl(S.periodo) : 'Supervisor de la tienda en ' + perLbl(S.periodo) + ' (archivo de metas). Al abrir la fila: ' + (r.supervisor_hist || '—'))}">${esc(r.supervisor || '—')}${r.supervisor_difiere ? ` <span class="pill warn" title="Al abrirse la fila el supervisor era ${esc(r.supervisor_hist || '—')}">antes ${esc(r.supervisor_hist || '—')}</span>` : ''}</td><td class="num" title="${r.dias_desde != null ? r.dias_desde + ' días' : ''}">${esc(fDate(r.fecha_inicio))}</td><td>${flag(r)}</td>${ro ? '' : `<td>${acts(r)}</td>`}</tr>`).join('') || '<tr><td colspan="10" class="empty">Sin filas con ese filtro.</td></tr>'}
     </tbody></table></div></section>`;
@@ -621,11 +621,34 @@ function viewCobFirmar(){
     ${ro || !D.length ? '' : `<div class="actions"><button id="cob-firmar" class="primary" ${pa ? 'disabled' : ''}>Firmar cobertura${F ? ' como v' + (F.version + 1) : ' v1'}</button></div>`}
   </section>`;
 }
+// alta de persona (inline en un evento o sola) → cob_persona_crear
+function personaFields(hidden){
+  const cat = S.cob.cat || {categorias: [], roles: []};
+  return `<div id="np" class="frm full" style="grid-column:1/-1;border:1px dashed var(--line);border-radius:8px;padding:10px" ${hidden ? 'hidden' : ''}>
+    <div class="f"><label class="lbl" for="np-nombre">Nombre completo</label><input id="np-nombre" placeholder="Apellidos y nombres como en Buk"></div>
+    <div class="f"><label class="lbl" for="np-rut">RUT</label><input id="np-rut" placeholder="12345678-9" autocomplete="off"></div>
+    <div class="f"><label class="lbl" for="np-rol">Rol</label><select id="np-rol">${(cat.roles || []).map(r => `<option ${r.nombre==='Promotor'?'selected':''}>${esc(r.nombre)}</option>`).join('')}</select></div>
+    <div class="f"><label class="lbl" for="np-cat">Categoría (promotores)</label><select id="np-cat"><option value="">—</option>${(cat.categorias || []).map(c => `<option value="${c.id}" ${c.nombre==='Captador C'?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+    <div class="f"><label class="lbl" for="np-ing">Fecha de ingreso</label><input type="date" id="np-ing" value="${hoyISO()}"></div>
+    <p class="hint" style="grid-column:1/-1;margin:0">Si el RUT ya existe inactivo, se reactiva esa misma persona (no se duplica). Sin RUT se crea igual y queda marcada para completar.</p></div>`;
+}
+async function personaCrearDesdeForm(motivo){
+  const nombre = ($('#np-nombre') || {}).value || '', rut = ($('#np-rut') || {}).value || '';
+  if (nombre.trim().length < 5) throw new Error('Escribe el nombre completo de la persona nueva');
+  const r = await rpc('cob_persona_crear', {p: {nombre, rut: rut || null, rol: $('#np-rol').value, categoria_id: $('#np-cat').value || null, fecha_ingreso: $('#np-ing').value || null, motivo}});
+  toast(`Persona ${r.accion}: ${r.nombre}`);
+  return r.id;
+}
+function bindPersonaSel(){ document.querySelectorAll('[data-persona-sel]').forEach(s => s.onchange = () => { const np = $('#np'); if (np) np.hidden = s.value !== '__nueva__'; }); }
+function cobPersonaSola(){
+  openModal({title: 'Alta de persona', intro: 'Queda en el maestro de personas; para asignarla a una tienda usa luego <b>+ Alta</b> o <b>Cubrir</b> en una vacante.', extra: personaFields(false), needMotivo: true, confirmLbl: 'Crear persona',
+    onConfirm: async (motivo) => { await personaCrearDesdeForm(motivo); await cobReload(); }});
+}
 // formulario de evento → cob_evento_manual
 function cobForm(tipo, ctx){
   const C = S.cob, cat = C.cat || {tiendas: [], personas: [], supervisores: []}, row = ctx.row || null;
   const selT = (id, val, lbl) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}"><option value="">—</option>${cat.tiendas.map(t => `<option value="${t.id}" ${String(t.id)===String(val)?'selected':''}>${esc(t.cuenta)} · ${esc(t.nombre)}</option>`).join('')}</select></div>`;
-  const selP = (id, val, lbl, soloLibres) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}"><option value="">—</option>${cat.personas.filter(p => !soloLibres || !p.vigente).map(p => `<option value="${p.id}" ${String(p.id)===String(val)?'selected':''}>${esc(p.nombre)}${p.rol ? ' · ' + esc(p.rol) : ''}${p.vigente ? ' (con tienda)' : ''}</option>`).join('')}</select></div>`;
+  const selP = (id, val, lbl, soloLibres) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}" data-persona-sel><option value="">—</option><option value="__nueva__">➕ Nueva persona (no está en la lista)…</option>${cat.personas.filter(p => !soloLibres || !p.vigente).map(p => `<option value="${p.id}" ${String(p.id)===String(val)?'selected':''}>${esc(p.nombre)}${p.rol ? ' · ' + esc(p.rol) : ''}${p.vigente ? ' (con tienda)' : ''}</option>`).join('')}</select></div>${personaFields(true)}`;
   const selJ = (val, lbl) => `<div class="f"><label class="lbl" for="e-jor">${lbl || 'Jornada'}</label><select id="e-jor"><option value="">— sin cambio —</option>${JORNADAS.map(j => `<option ${j===val?'selected':''}>${j}</option>`).join('')}</select></div>`;
   const fecha = (lbl, val) => `<div class="f"><label class="lbl" for="e-fecha">${lbl || 'Fecha de efecto'}</label><input type="date" id="e-fecha" value="${val || hoyISO()}"></div>`;
   const fecha2 = () => `<div class="f"><label class="lbl" for="e-fecha2">Hasta</label><input type="date" id="e-fecha2"></div>`;
@@ -661,6 +684,7 @@ function cobForm(tipo, ctx){
   const extra = html + (RO() ? '' : `<label class="sw" style="margin-top:4px"><input type="checkbox" id="e-aprobar"> Dejar aprobado (listo para aplicar)</label>`);
   openModal({title, extra, needMotivo: true, confirmLbl: 'Crear evento', onConfirm: async (motivo) => {
     const ev = build(); ev.motivo = motivo;
+    if (ev.persona_id === '__nueva__') ev.persona_id = await personaCrearDesdeForm(motivo);
     if (!ev.fecha_efecto) throw new Error('Falta la fecha de efecto');
     if (['alta','vacante_cubre'].includes(tipo) && !ev.persona_id) throw new Error('Elige la persona');
     if (['alta','traslado','fijo_ruta','ruta_ruta','vacante_abre'].includes(tipo) && !ev.tienda_destino_id) throw new Error('Elige la tienda');
@@ -669,6 +693,7 @@ function cobForm(tipo, ctx){
     await rpc('cob_evento_manual', {p_evento: ev, p_aprobar: !!($('#e-aprobar') && $('#e-aprobar').checked)});
     toast('Evento creado' + (($('#e-aprobar') && $('#e-aprobar').checked) ? ' y aprobado' : ' como propuesto')); S.cob.sub = 'pendientes'; await cobReload();
   }});
+  bindPersonaSel();
 }
 async function cobDecidir(decision){
   const C = S.cob, ids = C.pend.filter(e => C.sel[e.id]).map(e => e.id); if (!ids.length) return;
@@ -702,6 +727,7 @@ function bindCobertura(){
   const bn = $('#cob-anular'); if (bn) bn.onclick = () => cobDecidir('anular');
   const bp = $('#cob-aplicar'); if (bp) bp.onclick = cobAplicar;
   const bf = $('#cob-firmar'); if (bf) bf.onclick = cobFirmar;
+  const bpn = $('#cob-persona'); if (bpn) bpn.onclick = cobPersonaSola;
 }
 
 // ---------- render ----------
