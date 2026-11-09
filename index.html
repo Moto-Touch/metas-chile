@@ -159,6 +159,7 @@ tr.vac td{background:var(--warn-soft)}
       <a href="#variable">Variable</a>
       <a href="#metas">Metas</a>
       <a href="#cobertura">Cobertura</a>
+      <a href="#maestros">Maestros</a>
       <a href="#checklist">Checklist</a>
       <a href="#bitacora">Bitácora</a>
       <a href="#meta" class="tab-adv">Motor TRADE</a>
@@ -175,7 +176,7 @@ tr.vac td{background:var(--warn-soft)}
 const SUPA_URL = 'https://noskbefdrtayhwydlbfx.supabase.co';
 const SUPA_KEY = 'sb_publishable_5aLhvx4RAy5yqmRuLz4-zg_ZfuEppFV';
 const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
-const TABS = ['portafolio','meta','variable','metas','cobertura','checklist','bitacora'];
+const TABS = ['portafolio','meta','variable','metas','cobertura','maestros','checklist','bitacora'];
 const TRAMO_LBL = {1:'Base',2:'Medio',3:'Alto'};
 
 const S = {
@@ -185,7 +186,8 @@ const S = {
   metas: null, compPeriodo: null, metasFiltro: {cuenta:'', q:''}, margen: 0,
   check: null, foto: null, offReason: '', loadError: null,
   tramoFiltro: 'miden', vistaPort: 'nacional', cuentaCat: '', busy: false, importPrev: null,
-  cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}, gv: null, gvLoading: false, ma: null, maLoading: false, maSub: 'tiendas', maF: {cuenta: '', q: '', vig: true, conAlias: false}, maRes: null, maResLoading: false, maTxt: ''},
+  cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}, gv: null, gvLoading: false},
+  ma: {data: null, loading: false, sub: 'tiendas', f: {cuenta: '', q: '', vig: true, conAlias: false}, res: null, resLoading: false, txt: ''},
 };
 
 // ---------- utilidades ----------
@@ -564,9 +566,9 @@ function viewCobertura(){
     </div>
     <div class="chips">${(E.cupos_por_cuenta || []).map(c => `<span class="pill">${esc(c.cuenta)} <b>${nf1.format(+c.cupos)}</b> · ${c.tiendas} t</span>`).join('')}</div>
     ${C.error ? `<div class="banner bad"><p>${esc(C.error)}</p></div>` : ''}
-    <div class="subtabs"><button data-sub="mapa" aria-current="${C.sub==='mapa'}">Mapa</button><button data-sub="pendientes" aria-current="${C.sub==='pendientes'}">Pendientes${nP ? ` (${nP})` : ''}</button><button data-sub="firmar" aria-current="${C.sub==='firmar'}">Firmar período${+E.diff_vs_firme ? ` (${E.diff_vs_firme})` : ''}</button><button data-sub="maestros" aria-current="${C.sub==='maestros'}">Maestros${C.ma ? ` (${(C.ma.alias||[]).filter(a => a.activo).length} alias)` : ''}</button><button data-sub="gv" aria-current="${C.sub==='gv'}">GeoVictoria${C.gv ? ` (${(C.gv.sin_persona||[]).length + (C.gv.inactivas_marcando||[]).length + (C.gv.activas_sin_tienda||[]).filter(x => x.marca_hoy).length + (C.gv.planificadas_sin_marca||[]).length})` : ''}</button><span class="grow"></span><button id="cob-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div>
+    <div class="subtabs"><button data-sub="mapa" aria-current="${C.sub==='mapa'}">Mapa</button><button data-sub="pendientes" aria-current="${C.sub==='pendientes'}">Pendientes${nP ? ` (${nP})` : ''}</button><button data-sub="firmar" aria-current="${C.sub==='firmar'}">Firmar período${+E.diff_vs_firme ? ` (${E.diff_vs_firme})` : ''}</button><button data-sub="gv" aria-current="${C.sub==='gv'}">GeoVictoria${C.gv ? ` (${(C.gv.sin_persona||[]).length + (C.gv.inactivas_marcando||[]).length + (C.gv.activas_sin_tienda||[]).filter(x => x.marca_hoy).length + (C.gv.planificadas_sin_marca||[]).length})` : ''}</button><span class="grow"></span><button id="cob-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div>
   </section>`;
-  return kpi + ({mapa: viewCobMapa, pendientes: viewCobPend, firmar: viewCobFirmar, gv: viewCobGV, maestros: viewCobMaestros}[C.sub] || viewCobMapa)();
+  return kpi + ({mapa: viewCobMapa, pendientes: viewCobPend, firmar: viewCobFirmar, gv: viewCobGV}[C.sub] || viewCobMapa)();
 }
 function viewCobMapa(){
   const C = S.cob, f = C.filtro, q = (f.q || '').toLowerCase(), cuentas = [...new Set(C.vigente.map(r => r.cuenta))].sort();
@@ -749,20 +751,21 @@ function cobFirmar(){
   openModal({title: `Firmar cobertura de ${perLbl(S.periodo)}${F ? ' · v' + (F.version + 1) : ' · v1'}`, intro: `Se congelan ${C.diff.length} diferencia(s) junto con el resto del ciclo. Desde esta versión se pueden reemitir metas y cartas.`, needMotivo: true, confirmLbl: 'Firmar',
     onConfirm: async (motivo) => { const r = await rpc('cob_firmar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_notas: motivo, p_fuente_archivo: null}); toast(`Firmada v${r.version}: ${r.n_filas} filas · ${nf1.format(+r.cupos_valor)} cupos`); await cobReload(); }});
 }
-// ----- Cobertura › Maestros › Tiendas (alias) -----
+// ----- Maestros (pestaña propia): tiendas canónicas, alias de tienda y de cuenta -----
 const VIA_LBL = {codigo:'código', alias:'alias', legacy:'código legacy', mototalk:'nombre MotoTalk', nombre:'nombre exacto'};
 const FUENTE_LBL = {archivo_agencia:'archivo agencia', base_touch:'Base Touch', geovictoria:'GeoVictoria', otro:'otro'};
-async function loadMaestros(){ const C = S.cob; if (C.maLoading) return; C.maLoading = true; renderMain(); try { C.ma = await rpc('cob_alias_maestro'); } catch(e) { C.ma = {error: errMsg(e)}; } finally { C.maLoading = false; renderMain(); } }
-function viewCobMaestros(){
-  const C = S.cob, M = C.ma;
-  if (!M && !C.maLoading) { setTimeout(loadMaestros, 0); return '<div class="empty">Cargando maestros…</div>'; }
-  if (C.maLoading && !M) return '<div class="empty">Cargando maestros…</div>';
+async function loadMaestros(){ const C = S.ma; if (C.loading) return; C.loading = true; renderMain(); try { C.data = await rpc('cob_alias_maestro'); } catch(e) { C.data = {error: errMsg(e)}; } finally { C.loading = false; renderMain(); } }
+function viewMaestros(){
+  const C = S.ma, M = C.data;
+  if (!M && !C.loading) { setTimeout(loadMaestros, 0); return '<div class="empty">Cargando maestros…</div>'; }
+  if (C.loading && !M) return '<div class="empty">Cargando maestros…</div>';
   if (M.error) return `<div class="banner bad"><p>${esc(M.error)}</p><button id="ma-retry">Reintentar</button></div>`;
-  const sub = `<div class="subtabs" style="margin-bottom:10px"><button data-masub="tiendas" aria-current="${C.maSub==='tiendas'}">Tiendas (alias)</button><button data-masub="cuentas" aria-current="${C.maSub==='cuentas'}">Cuentas (alias)</button><button data-masub="probar" aria-current="${C.maSub==='probar'}">Probar resolución</button><span class="grow"></span><button id="ma-refresh" ${C.maLoading?'disabled':''}>${C.maLoading ? 'Actualizando…' : 'Actualizar'}</button></div>`;
-  return sub + ({tiendas: viewMaTiendas, cuentas: viewMaCuentas, probar: viewMaProbar}[C.maSub] || viewMaTiendas)();
+  const sub = `<section class="panel"><div class="panel-head"><h2>Maestros</h2><span class="muted">Capa de datos de referencia de TRADE: tiendas canónicas, cuentas y los alias con que los archivos externos las nombran. No depende del período.</span></div>
+    <div class="subtabs"><button data-masub="tiendas" aria-current="${C.sub==='tiendas'}">Tiendas (alias)</button><button data-masub="cuentas" aria-current="${C.sub==='cuentas'}">Cuentas (alias)</button><button data-masub="probar" aria-current="${C.sub==='probar'}">Probar resolución</button><span class="grow"></span><button id="ma-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div></section>`;
+  return sub + ({tiendas: viewMaTiendas, cuentas: viewMaCuentas, probar: viewMaProbar}[C.sub] || viewMaTiendas)();
 }
 function viewMaTiendas(){
-  const C = S.cob, M = C.ma, f = C.maF, ro = RO(), q = (f.q || '').toLowerCase();
+  const C = S.ma, M = C.data, f = C.f, ro = RO(), q = (f.q || '').toLowerCase();
   const aliasPor = new Map(); for (const a of M.alias) { if (!a.activo) continue; const l = aliasPor.get(a.tienda_id) || []; l.push(a); aliasPor.set(a.tienda_id, l); }
   const cuentas = [...new Set(M.tiendas.map(t => t.cuenta))].sort();
   let rows = M.tiendas;
@@ -791,7 +794,7 @@ function viewMaTiendas(){
   </section>`;
 }
 function viewMaCuentas(){
-  const C = S.cob, M = C.ma, ro = RO();
+  const C = S.ma, M = C.data, ro = RO();
   const act = M.cuenta_alias.filter(a => a.activo), inact = M.cuenta_alias.filter(a => !a.activo);
   return `<section class="panel"><div class="panel-head"><h2>Alias de cuenta (cadena)</h2>${ro ? '' : '<button id="ma-addcta">+ alias de cuenta</button>'}</div>
     <p class="hint">Nombres con que los archivos externos llaman a una cuenta de TRADE. Se usan para resolver el prefijo de un código (<span class="kbd">CENCOSUD::123</span> → Paris) y la columna "cadena" de los archivos.</p>
@@ -801,7 +804,7 @@ function viewMaCuentas(){
     </tbody></table></div></section>`;
 }
 function viewMaProbar(){
-  const C = S.cob, R = C.maRes, ro = RO();
+  const C = S.ma, R = C.res, ro = RO();
   const resTbl = !R ? '' : R.error ? `<div class="banner bad"><p>${esc(R.error)}</p></div>` : (() => {
     const ok = R.filter(r => r.tienda_id), ko = R.filter(r => !r.tienda_id);
     const porVia = {}; for (const r of ok) porVia[r.via] = (porVia[r.via] || 0) + 1;
@@ -815,15 +818,15 @@ function viewMaProbar(){
   })();
   return `<section class="panel"><div class="panel-head"><h2>Probar cómo resuelve un archivo</h2></div>
     <p class="hint">Pega una lista de tiendas tal como vienen en el archivo (una por línea; opcionalmente <span class="kbd">texto<b>⇥</b>cadena</span> o <span class="kbd">texto ; cadena</span>). No cambia nada: muestra a qué tienda canónica llega cada una y por qué vía. Lo que quede sin resolver se puede fijar como alias desde la misma fila.</p>
-    <textarea id="ma-txt" rows="6" style="width:100%;font-family:var(--f-mono);font-size:13px" placeholder="Plaza Vespucio\tEntel&#10;CENCOSUD::123&#10;SUCURSAL ENTEL PLAZA OESTE">${esc(C.maTxt)}</textarea>
-    <div class="ctrl" style="margin-top:8px"><button class="primary" id="ma-resolver" ${C.maResLoading?'disabled':''}>${C.maResLoading ? 'Resolviendo…' : 'Resolver'}</button><span class="muted">Hasta 2.000 líneas por consulta.</span></div>
+    <textarea id="ma-txt" rows="6" style="width:100%;font-family:var(--f-mono);font-size:13px" placeholder="Plaza Vespucio\tEntel&#10;CENCOSUD::123&#10;SUCURSAL ENTEL PLAZA OESTE">${esc(C.txt)}</textarea>
+    <div class="ctrl" style="margin-top:8px"><button class="primary" id="ma-resolver" ${C.resLoading?'disabled':''}>${C.resLoading ? 'Resolviendo…' : 'Resolver'}</button><span class="muted">Hasta 2.000 líneas por consulta.</span></div>
     ${resTbl}</section>`;
 }
 function maSplitLines(txt){ return String(txt || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { const m = l.split(/\t|\s*;\s*/); return {texto: m[0].trim(), cuenta: (m[1] || '').trim() || null}; }); }
-async function maResolver(){ const C = S.cob; C.maTxt = $('#ma-txt').value; const filas = maSplitLines(C.maTxt); if (!filas.length) { toast('Pega al menos una línea'); return; } C.maResLoading = true; renderMain(); try { C.maRes = await rpc('cob_alias_resolver', {p_filas: filas}); } catch(e) { C.maRes = {error: errMsg(e)}; } finally { C.maResLoading = false; renderMain(); } }
+async function maResolver(){ const C = S.ma; C.txt = $('#ma-txt').value; const filas = maSplitLines(C.txt); if (!filas.length) { toast('Pega al menos una línea'); return; } C.resLoading = true; renderMain(); try { C.res = await rpc('cob_alias_resolver', {p_filas: filas}); } catch(e) { C.res = {error: errMsg(e)}; } finally { C.resLoading = false; renderMain(); } }
 function maTiendaSelect(id, M, sel, cuentaId){ const ts = M.tiendas.filter(t => !cuentaId || String(t.cuenta_id) === String(cuentaId)); return `<select id="${id}" style="width:100%"><option value="">— elegir tienda canónica —</option>${ts.map(t => `<option value="${t.id}" ${String(t.id)===String(sel)?'selected':''}>${esc(t.cuenta)} · ${esc(t.nombre)} (${esc(t.clave)})${t.vigente ? '' : ' · sin promotor'}</option>`).join('')}</select>`; }
 function maAliasForm({alias, cuentaId, tiendaId, sugerencias}){
-  const C = S.cob, M = C.ma;
+  const C = S.ma, M = C.data;
   const extra = `<div class="fields" style="display:grid;gap:8px">
     <div class="field"><label class="lbl" for="al-alias">Alias (texto tal como viene en el archivo)</label><input id="al-alias" value="${esc(alias || '')}"></div>
     <div class="field"><label class="lbl" for="al-cuenta">Cuenta del alias <span class="muted">(acota la tienda; "global" si el texto no trae cadena)</span></label><select id="al-cuenta"><option value="">Global</option>${M.cuentas.map(c => `<option value="${c.id}" ${String(c.id)===String(cuentaId||'')?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div>
@@ -833,44 +836,43 @@ function maAliasForm({alias, cuentaId, tiendaId, sugerencias}){
     onConfirm: async (motivo) => {
       const p = {tipo: 'tienda', alias: $('#al-alias').value, cuenta_id: $('#al-cuenta').value || null, tienda_id: $('#al-tienda').value || null, fuente: $('#al-fuente').value, motivo};
       if (!p.tienda_id) throw new Error('Elige la tienda canónica');
-      await rpc('cob_alias_guardar', {p}); toast('Alias guardado'); C.ma = null; await loadMaestros(); if (C.maRes && !C.maRes.error) await maResolver();
+      await rpc('cob_alias_guardar', {p}); toast('Alias guardado'); C.data = null; await loadMaestros(); if (C.res && !C.res.error) await maResolver();
     }});
   const sc = $('#al-cuenta'); if (sc) sc.onchange = () => { const cur = $('#al-tienda').value; $('#al-tienda').outerHTML = maTiendaSelect('al-tienda', M, cur, sc.value); };
   document.querySelectorAll('[data-sug]').forEach(b => b.onclick = () => { const t = M.tiendas.find(x => String(x.id) === b.dataset.sug); if (t) { $('#al-cuenta').value = String(t.cuenta_id); $('#al-tienda').outerHTML = maTiendaSelect('al-tienda', M, t.id, t.cuenta_id); } });
 }
 function maCuentaForm(){
-  const C = S.cob, M = C.ma;
+  const C = S.ma, M = C.data;
   openModal({title: 'Nuevo alias de cuenta', extra: `<div class="field"><label class="lbl" for="ac-alias">Alias (como viene en el archivo)</label><input id="ac-alias" placeholder="Ej.: CENCOSUD"></div><div class="field"><label class="lbl" for="ac-cuenta">Cuenta en TRADE</label><select id="ac-cuenta">${M.cuentas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></div>`, needMotivo: true, confirmLbl: 'Guardar alias',
-    onConfirm: async (motivo) => { await rpc('cob_alias_guardar', {p: {tipo: 'cuenta', alias: $('#ac-alias').value, cuenta_id: $('#ac-cuenta').value, motivo}}); toast('Alias de cuenta guardado'); C.ma = null; await loadMaestros(); }});
+    onConfirm: async (motivo) => { await rpc('cob_alias_guardar', {p: {tipo: 'cuenta', alias: $('#ac-alias').value, cuenta_id: $('#ac-cuenta').value, motivo}}); toast('Alias de cuenta guardado'); C.data = null; await loadMaestros(); }});
 }
 function maDesactivar(tipo, id){
-  const C = S.cob, M = C.ma, a = (tipo === 'cuenta' ? M.cuenta_alias : M.alias).find(x => String(x.id) === String(id)); if (!a) return;
+  const C = S.ma, M = C.data, a = (tipo === 'cuenta' ? M.cuenta_alias : M.alias).find(x => String(x.id) === String(id)); if (!a) return;
   openModal({title: `Desactivar alias "${a.alias}"`, intro: 'No se borra: queda inactivo y en la bitácora. Los archivos que traigan ese texto volverán a salir como "sin resolver".', needMotivo: true, confirmLbl: 'Desactivar',
-    onConfirm: async (motivo) => { await rpc('cob_alias_desactivar', {p_tipo: tipo, p_id: +id, p_motivo: motivo}); toast('Alias desactivado'); C.ma = null; await loadMaestros(); }});
+    onConfirm: async (motivo) => { await rpc('cob_alias_desactivar', {p_tipo: tipo, p_id: +id, p_motivo: motivo}); toast('Alias desactivado'); C.data = null; await loadMaestros(); }});
 }
 function bindMaestros(){
-  const C = S.cob, M = C.ma, on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
-  const rt = $('#ma-retry'); if (rt) rt.onclick = () => { C.ma = null; loadMaestros(); };
-  const rf = $('#ma-refresh'); if (rf) rf.onclick = () => { C.ma = null; loadMaestros(); };
-  on('[data-masub]', 'click', (e) => { C.maSub = e.currentTarget.dataset.masub; renderMain(); });
-  const fc = $('#ma-cuenta'); if (fc) fc.onchange = (e) => { C.maF.cuenta = e.target.value; renderMain(); };
-  const fv = $('#ma-vig'); if (fv) fv.onchange = (e) => { C.maF.vig = e.target.checked; renderMain(); };
-  const fa = $('#ma-conalias'); if (fa) fa.onchange = (e) => { C.maF.conAlias = e.target.checked; renderMain(); };
-  const fq = $('#ma-q'); if (fq) { fq.oninput = (e) => { C.maF.q = e.target.value; }; fq.onchange = () => renderMain(); fq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
+  const C = S.ma, M = C.data, on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
+  const rt = $('#ma-retry'); if (rt) rt.onclick = () => { C.data = null; loadMaestros(); };
+  const rf = $('#ma-refresh'); if (rf) rf.onclick = () => { C.data = null; loadMaestros(); };
+  on('[data-masub]', 'click', (e) => { C.sub = e.currentTarget.dataset.masub; renderMain(); });
+  const fc = $('#ma-cuenta'); if (fc) fc.onchange = (e) => { C.f.cuenta = e.target.value; renderMain(); };
+  const fv = $('#ma-vig'); if (fv) fv.onchange = (e) => { C.f.vig = e.target.checked; renderMain(); };
+  const fa = $('#ma-conalias'); if (fa) fa.onchange = (e) => { C.f.conAlias = e.target.checked; renderMain(); };
+  const fq = $('#ma-q'); if (fq) { fq.oninput = (e) => { C.f.q = e.target.value; }; fq.onchange = () => renderMain(); fq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
   on('[data-ma-add]', 'click', (e) => { const t = M.tiendas.find(x => String(x.id) === e.currentTarget.dataset.maAdd); maAliasForm({cuentaId: t && t.cuenta_id, tiendaId: t && t.id}); });
   on('[data-ma-off]', 'click', (e) => maDesactivar('tienda', e.currentTarget.dataset.maOff));
   on('[data-ma-offcta]', 'click', (e) => maDesactivar('cuenta', e.currentTarget.dataset.maOffcta));
   const bc = $('#ma-addcta'); if (bc) bc.onclick = maCuentaForm;
   const br = $('#ma-resolver'); if (br) br.onclick = maResolver;
-  const tx = $('#ma-txt'); if (tx) tx.onchange = () => { C.maTxt = tx.value; };
-  on('[data-ma-fix]', 'click', (e) => { const r = (C.maRes || []).find(x => String(x.i) === e.currentTarget.dataset.maFix); if (!r) return; maAliasForm({alias: r.texto, cuentaId: r.cuenta_id, tiendaId: r.tienda_id, sugerencias: r.sugerencias}); });
+  const tx = $('#ma-txt'); if (tx) tx.onchange = () => { C.txt = tx.value; };
+  on('[data-ma-fix]', 'click', (e) => { const r = (C.res || []).find(x => String(x.i) === e.currentTarget.dataset.maFix); if (!r) return; maAliasForm({alias: r.texto, cuentaId: r.cuenta_id, tiendaId: r.tienda_id, sugerencias: r.sugerencias}); });
 }
 function bindCobertura(){
   const C = S.cob, on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
   const rt = $('#cob-retry'); if (rt) rt.onclick = loadCob;
   const rf = $('#cob-refresh'); if (rf) rf.onclick = cobReload;
   on('[data-sub]', 'click', (e) => { C.sub = e.currentTarget.dataset.sub; renderMain(); });
-  if (C.sub === 'maestros' && C.ma) bindMaestros();
   const fc = $('#cob-cuenta'); if (fc) fc.onchange = (e) => { C.filtro.cuenta = e.target.value; renderMain(); };
   const fe = $('#cob-estado'); if (fe) fe.onchange = (e) => { C.filtro.estado = e.target.value; renderMain(); };
   const fq = $('#cob-q'); if (fq) { fq.oninput = (e) => { C.filtro.q = e.target.value; }; fq.onchange = () => renderMain(); fq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
@@ -914,9 +916,9 @@ function renderMain(){
   let top = '';
   if (RO()) top = `<div class="banner acc"><p><b>Vista de solo lectura.</b> Ves lo que está aplicado en TRADE para ${esc(perLbl(S.periodo))}; los cambios los hace un usuario editor.</p></div>`;
   if (S.loadError) top += `<div class="banner bad"><p>${esc(S.loadError)}</p></div>`;
-  if (!S.base.params) { m.innerHTML = top + `<section class="panel"><h2>${esc(perLbl(S.periodo))} todavía no tiene supuestos</h2><p class="hint">Cada período guarda sus propios supuestos: portafolio, reglas de la meta, variable y Motothings. Lo normal es partir del período anterior y editar lo que cambie.</p><div class="ctrl">${S.prev ? `<button class="primary" id="b-copiar">Copiar de ${esc(perLbl(S.prev))}</button>` : ''}${RO() ? '' : '<button id="b-crear">Crear con valores por defecto</button>'}</div></section>`; const bc = $('#b-copiar'); if (bc) bc.onclick = () => actCrearParams(S.prev); const bcr = $('#b-crear'); if (bcr) bcr.onclick = () => actCrearParams(null); return; }
+  if (!S.base.params && curTab() !== 'maestros') { m.innerHTML = top + `<section class="panel"><h2>${esc(perLbl(S.periodo))} todavía no tiene supuestos</h2><p class="hint">Cada período guarda sus propios supuestos: portafolio, reglas de la meta, variable y Motothings. Lo normal es partir del período anterior y editar lo que cambie.</p><div class="ctrl">${S.prev ? `<button class="primary" id="b-copiar">Copiar de ${esc(perLbl(S.prev))}</button>` : ''}${RO() ? '' : '<button id="b-crear">Crear con valores por defecto</button>'}</div></section>`; const bc = $('#b-copiar'); if (bc) bc.onclick = () => actCrearParams(S.prev); const bcr = $('#b-crear'); if (bcr) bcr.onclick = () => actCrearParams(null); return; }
   const t = curTab();
-  m.innerHTML = top + ({portafolio: viewPortafolio, meta: viewMeta, variable: viewVariable, metas: viewMetas, cobertura: viewCobertura, checklist: viewCheck, bitacora: viewLog}[t])();
+  m.innerHTML = top + ({portafolio: viewPortafolio, meta: viewMeta, variable: viewVariable, metas: viewMetas, cobertura: viewCobertura, maestros: viewMaestros, checklist: viewCheck, bitacora: viewLog}[t])();
   bind(t);
 }
 const prevLbl = () => S.prev ? perLbl(S.prev) : null;
@@ -1309,6 +1311,7 @@ function renderMainKeep(){
 function readFld(el, kind){ return kind === 'pct' ? fromPctInput(el.value) : kind === 'int' ? (el.value === '' ? null : Math.round(+el.value)) : kind === 'num' ? (el.value === '' ? null : +el.value) : kind === 'bool' ? (el.value === '' ? null : el.value === 'true') : el.value; }
 function bind(tab){
   const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
+  if (tab === 'maestros') { if (S.ma.data) bindMaestros(); return; }
   if (tab === 'portafolio') {
     const ft = $('#f-tramo'); if (ft) ft.onchange = (e) => { S.tramoFiltro = e.target.value; renderMain(); };
     const vp = $('#v-port'); if (vp) vp.onchange = (e) => { S.vistaPort = e.target.value; renderMain(); };
