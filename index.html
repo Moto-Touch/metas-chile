@@ -185,9 +185,10 @@ const S = {
   base: null, work: null,
   metas: null, compPeriodo: null, metasFiltro: {cuenta:'', q:''}, margen: 0,
   check: null, foto: null, offReason: '', loadError: null,
-  tramoFiltro: 'miden', vistaPort: 'nacional', cuentaCat: '', busy: false, importPrev: null,
+  tramoFiltro: 'miden', vistaPort: 'nacional', cuentaCat: '', busy: false, importPrev: null, importSinMatch: null,
   cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}, gv: null, gvLoading: false},
-  ma: {data: null, loading: false, sub: 'tiendas', f: {cuenta: '', q: '', vig: true, conAlias: false}, res: null, resLoading: false, txt: ''},
+  ma: {data: null, loading: false, sub: 'tiendas', f: {cuenta: '', q: '', vig: true, conAlias: false}, res: null, resLoading: false, txt: '',
+       per: null, perLoading: false, perF: {q: '', nivel: '', estado: 'activos'}, prod: null, prodLoading: false, prodF: {q: '', family: '', sub: 'modelos'}},
 };
 
 // ---------- utilidades ----------
@@ -452,7 +453,7 @@ function actImportar(prev){
   const tot = prev.filas.reduce((s, f) => s + (f.meta || 0), 0);
   const desglose = Object.entries(prev.porTipo || {}).map(([t, p]) => `${TIPO_LBL[t] || t}: ${p.n} tiendas · ${fN(p.u)} u`).join(' · ');
   openModal({title:`Importar ${prev.filas.length} tiendas a ${perLbl(S.periodo)}`, intro:`<b>${esc(prev.formato)}</b> · hoja ${esc(prev.hoja)}: ${esc(fN(tot))} unidades de meta. ${esc(desglose)}.${prev.malas ? ` <b>Ojo:</b> en ${prev.malas} tiendas Base + Medio + Alto no suma la meta total.` : ''} Las tiendas se cruzan por código (id_local, con variantes Movistar/Hites). Cada meta queda marcada por tipo (con promotor / supervisor / otras) y se guarda la asignación de supervisor, zona y merchandiser del período. Las metas quedan en TRADE como <b>importada_base_touch</b>, en borrador; las importadas antes del mismo tipo que ya no vengan en el archivo se quitan.`, needMotivo: true, confirmLbl:'Importar',
-    onConfirm: async (motivo) => { const r = await rpc('app_importar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_filas: prev.filas, p_motivo: motivo}); toast(r ? `Importadas ${r.importadas}; sin tienda ${r.sin_tienda}; sin cobertura ${r.sin_cobertura}` : 'Importación hecha'); S.importPrev = null; if (r && r.sin_tienda) S.importAviso = `Códigos sin tienda en TRADE: ${r.codigos_sin_match}`; await Promise.all([loadMetas(), loadCheck()]); render(); }});
+    onConfirm: async (motivo) => { const r = await rpc('app_importar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_filas: prev.filas, p_motivo: motivo}); toast(r ? `Importadas ${r.importadas}; sin tienda ${r.sin_tienda}; sin cobertura ${r.sin_cobertura}` : 'Importación hecha'); S.importPrev = null; if (r && r.sin_tienda) { S.importAviso = `Códigos sin tienda en TRADE: ${r.codigos_sin_match}`; S.importSinMatch = r.codigos_sin_match; } await Promise.all([loadMetas(), loadCheck()]); render(); }});
 }
 
 // ---------- actualizar TAM desde archivo ----------
@@ -660,7 +661,7 @@ function personaFields(hidden){
     <div class="f"><label class="lbl" for="np-rol">Rol</label><select id="np-rol">${(cat.roles || []).map(r => `<option ${r.nombre==='Promotor'?'selected':''}>${esc(r.nombre)}</option>`).join('')}</select></div>
     <div class="f"><label class="lbl" for="np-cat">Categoría (promotores)</label><select id="np-cat"><option value="">—</option>${(cat.categorias || []).map(c => `<option value="${c.id}" ${c.nombre==='Captador C'?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div>
     <div class="f"><label class="lbl" for="np-ing">Fecha de ingreso</label><input type="date" id="np-ing" value="${hoyISO()}"></div>
-    <p class="hint" id="np-gv" style="grid-column:1/-1;margin:0">Al escribir el RUT se consulta GeoVictoria y se completa el nombre. Si el RUT ya existe inactivo, se reactiva esa misma persona (no se duplica). Sin RUT se crea igual.</p></div>`;
+    <p class="hint" id="np-gv" style="grid-column:1/-1;margin:0"><b>Se agregará al maestro de Personas</b> junto con este evento. Al escribir el RUT se consulta GeoVictoria y se completa el nombre; si el RUT ya existe inactivo, se reactiva esa misma persona (no se duplica). Sin RUT se crea igual. Luego se puede editar en Maestros › Personas.</p></div>`;
 }
 async function personaCrearDesdeForm(motivo){
   const nombre = ($('#np-nombre') || {}).value || '', rut = ($('#np-rut') || {}).value || '';
@@ -688,7 +689,7 @@ function cobPersonaSola(){
 function cobForm(tipo, ctx){
   const C = S.cob, cat = C.cat || {tiendas: [], personas: [], supervisores: []}, row = ctx.row || null;
   const selT = (id, val, lbl) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}"><option value="">—</option>${cat.tiendas.map(t => `<option value="${t.id}" ${String(t.id)===String(val)?'selected':''}>${esc(t.cuenta)} · ${esc(t.nombre)}</option>`).join('')}</select></div>`;
-  const selP = (id, val, lbl, soloLibres) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}" data-persona-sel><option value="">—</option><option value="__nueva__">➕ Nueva persona (no está en la lista)…</option>${cat.personas.filter(p => !soloLibres || !p.vigente).map(p => `<option value="${p.id}" ${String(p.id)===String(val)?'selected':''}>${esc(p.nombre)}${p.rol ? ' · ' + esc(p.rol) : ''}${p.vigente ? ' (con tienda)' : ''}</option>`).join('')}</select></div>${personaFields(true)}`;
+  const selP = (id, val, lbl, soloLibres) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}" data-persona-sel><option value="">—</option><option value="__nueva__">➕ Nueva persona (no está en el maestro: se agrega al crear el evento)…</option>${cat.personas.filter(p => !soloLibres || !p.vigente).map(p => `<option value="${p.id}" ${String(p.id)===String(val)?'selected':''}>${esc(p.nombre)}${p.rol ? ' · ' + esc(p.rol) : ''}${p.vigente ? ' (con tienda)' : ''}</option>`).join('')}</select></div>${personaFields(true)}`;
   const selJ = (val, lbl) => `<div class="f"><label class="lbl" for="e-jor">${lbl || 'Jornada'}</label><select id="e-jor"><option value="">— sin cambio —</option>${JORNADAS.map(j => `<option ${j===val?'selected':''}>${j}</option>`).join('')}</select></div>`;
   const fecha = (lbl, val) => `<div class="f"><label class="lbl" for="e-fecha">${lbl || 'Fecha de efecto'}</label><input type="date" id="e-fecha" value="${val || hoyISO()}"></div>`;
   const fecha2 = () => `<div class="f"><label class="lbl" for="e-fecha2">Hasta</label><input type="date" id="e-fecha2"></div>`;
@@ -760,9 +761,9 @@ function viewMaestros(){
   if (!M && !C.loading) { setTimeout(loadMaestros, 0); return '<div class="empty">Cargando maestros…</div>'; }
   if (C.loading && !M) return '<div class="empty">Cargando maestros…</div>';
   if (M.error) return `<div class="banner bad"><p>${esc(M.error)}</p><button id="ma-retry">Reintentar</button></div>`;
-  const sub = `<section class="panel"><div class="panel-head"><h2>Maestros</h2><span class="muted">Capa de datos de referencia de TRADE: tiendas canónicas, cuentas y los alias con que los archivos externos las nombran. No depende del período.</span></div>
-    <div class="subtabs"><button data-masub="tiendas" aria-current="${C.sub==='tiendas'}">Tiendas (alias)</button><button data-masub="cuentas" aria-current="${C.sub==='cuentas'}">Cuentas (alias)</button><button data-masub="probar" aria-current="${C.sub==='probar'}">Probar resolución</button><span class="grow"></span><button id="ma-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div></section>`;
-  return sub + ({tiendas: viewMaTiendas, cuentas: viewMaCuentas, probar: viewMaProbar}[C.sub] || viewMaTiendas)();
+  const sub = `<section class="panel"><div class="panel-head"><h2>Maestros</h2><span class="muted">Capa de referencia de TRADE: cuentas, tiendas canónicas, personas y productos, con los alias con que los archivos externos las nombran. No depende del período; las pestañas operativas la consumen y, cuando algo nuevo aparece en ellas, preguntan antes de agregarlo acá.</span></div>
+    <div class="subtabs"><button data-masub="cuentas" aria-current="${C.sub==='cuentas'}">Cuentas</button><button data-masub="tiendas" aria-current="${C.sub==='tiendas'}">Tiendas</button><button data-masub="personas" aria-current="${C.sub==='personas'}">Personas${C.per && !C.per.error ? ` (${C.per.personas.filter(x => x.activo).length})` : ''}</button><button data-masub="productos" aria-current="${C.sub==='productos'}">Productos${C.prod && !C.prod.error && C.prod.pendientes.length ? ` <span class="pill warn" style="padding:1px 7px">${C.prod.pendientes.length} pend.</span>` : ''}</button><button data-masub="probar" aria-current="${C.sub==='probar'}">Probar resolución</button><span class="grow"></span><button id="ma-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div></section>`;
+  return sub + ({tiendas: viewMaTiendas, cuentas: viewMaCuentas, personas: viewMaPersonas, productos: viewMaProductos, probar: viewMaProbar}[C.sub] || viewMaTiendas)();
 }
 function viewMaTiendas(){
   const C = S.ma, M = C.data, f = C.f, ro = RO(), q = (f.q || '').toLowerCase();
@@ -851,11 +852,131 @@ function maDesactivar(tipo, id){
   openModal({title: `Desactivar alias "${a.alias}"`, intro: 'No se borra: queda inactivo y en la bitácora. Los archivos que traigan ese texto volverán a salir como "sin resolver".', needMotivo: true, confirmLbl: 'Desactivar',
     onConfirm: async (motivo) => { await rpc('cob_alias_desactivar', {p_tipo: tipo, p_id: +id, p_motivo: motivo}); toast('Alias desactivado'); C.data = null; await loadMaestros(); }});
 }
+// ----- Maestros › Personas -----
+async function loadPersonas(){ const C = S.ma; if (C.perLoading) return; C.perLoading = true; renderMain(); try { C.per = await rpc('mst_personas'); } catch(e) { C.per = {error: errMsg(e)}; } finally { C.perLoading = false; renderMain(); } }
+function viewMaPersonas(){
+  const C = S.ma, P = C.per, f = C.perF, ro = RO(), q = (f.q || '').toLowerCase();
+  if (!P && !C.perLoading) { setTimeout(loadPersonas, 0); return '<div class="empty">Cargando personas…</div>'; }
+  if (C.perLoading && !P) return '<div class="empty">Cargando personas…</div>';
+  if (P.error) return `<div class="banner bad"><p>${esc(P.error)}</p><button id="mp-retry">Reintentar</button></div>`;
+  let rows = P.personas;
+  if (f.estado === 'activos') rows = rows.filter(p => p.activo); else if (f.estado === 'inactivos') rows = rows.filter(p => !p.activo);
+  if (f.nivel) rows = rows.filter(p => (p.nivel || '') === f.nivel);
+  if (q) rows = rows.filter(p => [p.nombre, p.rut_norm, p.rol, p.categoria, p.tiendas, p.reporta_a].some(x => String(x||'').toLowerCase().includes(q)));
+  const act = P.personas.filter(p => p.activo), sinRut = act.filter(p => !p.rut_norm).length, sinTienda = act.filter(p => p.nivel === 'Promotor' && !p.vigente).length, inactMarcando = P.personas.filter(p => !p.activo && p.gv_ultima && p.gv_ultima >= new Date(Date.now() - 7*864e5).toLocaleDateString('sv-SE')).length;
+  const gvPill = (p) => !p.gv_ultima ? '<span class="muted">—</span>' : (p.gv_ultima >= new Date(Date.now() - 3*864e5).toLocaleDateString('sv-SE') ? `<span class="pill ok" title="${esc(p.gv_grupo||'')}">marca</span>` : `<span class="pill" title="${esc(p.gv_grupo||'')}">hasta ${esc(fDate(p.gv_ultima))}</span>`);
+  const tr = rows.slice(0, 400).map(p => `<tr class="${p.activo ? '' : 'removed'}"><td><b>${esc(p.nombre)}</b>${p.cargo_bono ? `<div class="muted" style="font-size:12px">${esc(p.cargo_bono)}</div>` : ''}</td>
+      <td>${p.rut_norm ? '<span class="pill ok" title="RUT registrado">RUT</span>' : '<span class="pill warn" title="Sin RUT: no cruza con GeoVictoria ni con la agencia">sin RUT</span>'}</td>
+      <td>${esc(p.rol || '—')}${p.categoria ? `<div class="muted" style="font-size:12px">${esc(p.categoria)}</div>` : ''}</td>
+      <td>${p.activo ? (p.vigente ? `<span class="pill acc">con tienda</span><div class="muted" style="font-size:12px">${esc(p.tiendas)}</div>` : (p.nivel === 'Promotor' ? '<span class="pill warn">sin tienda</span>' : '<span class="muted">—</span>')) : `<span class="pill">inactiva${p.fecha_termino ? ' · ' + esc(fDate(p.fecha_termino)) : ''}</span>`}</td>
+      <td>${gvPill(p)}${p.mototalk ? ' <span class="pill" title="Homologada en MotoTalk">MT</span>' : ''}</td>
+      <td class="muted">${esc(p.reporta_a || '')}</td><td class="muted">${p.fecha_ingreso ? esc(fDate(p.fecha_ingreso)) : ''}</td>
+      ${ro ? '' : `<td><div class="rowact"><button data-mp-edit="${p.id}">Editar</button>${p.activo ? `<button class="danger" data-mp-off="${p.id}" ${p.vigente ? 'disabled title="Primero la baja en Cobertura"' : ''}>Desactivar</button>` : `<button data-mp-on="${p.id}">Reactivar</button>`}</div></td>`}</tr>`).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Personas</h2><div class="ctrl">${ro ? '' : '<button class="primary" id="mp-nueva">+ Persona</button>'}<button id="mp-refresh">Actualizar</button></div></div>
+    <div class="statgrid"><div class="stat"><b>${fN(act.length)}</b><span>activas (${fN(P.personas.length - act.length)} inactivas)</span></div><div class="stat"><b>${fN(act.filter(p => p.vigente).length)}</b><span>con tienda vigente</span></div><div class="stat"><b style="${sinTienda ? 'color:var(--warn)' : ''}">${fN(sinTienda)}</b><span>promotores activos sin tienda</span></div><div class="stat"><b style="${sinRut ? 'color:var(--warn)' : ''}">${fN(sinRut)}</b><span>activas sin RUT</span></div><div class="stat"><b style="${inactMarcando ? 'color:var(--bad)' : ''}">${fN(inactMarcando)}</b><span>inactivas que marcaron esta semana</span></div></div>
+    <p class="hint">El RUT es la llave: nombre, rol, categoría y jornada son atributos. Desde acá se corrigen atributos y se activa / desactiva; <b>asignar a una tienda, trasladar o dar de baja de una tienda se hace en Cobertura</b> (queda como evento). Desactivar exige no tener tienda vigente. El alta desde Cobertura o GeoVictoria también cae en este maestro.</p>
+    <div class="ctrl"><input id="mp-q" placeholder="Buscar nombre, RUT, rol, tienda…" value="${esc(f.q)}" style="min-width:240px">
+      <label class="lbl" for="mp-nivel">Nivel</label><select id="mp-nivel"><option value="">Todos</option>${['Promotor','Mando Medio'].map(n => `<option ${f.nivel===n?'selected':''}>${n}</option>`).join('')}</select>
+      <label class="lbl" for="mp-estado">Estado</label><select id="mp-estado">${[['activos','Activas'],['inactivos','Inactivas'],['todos','Todas']].map(([k,v]) => `<option value="${k}" ${f.estado===k?'selected':''}>${v}</option>`).join('')}</select>
+      <span class="muted">${fN(rows.length)}${rows.length > 400 ? ' · se muestran 400' : ''}</span></div>
+    <div class="tbl tall"><table><thead><tr><th>Persona</th><th>RUT</th><th>Rol</th><th>Cobertura</th><th>GeoVictoria</th><th>Reporta a</th><th>Ingreso</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>${tr || '<tr><td colspan="8" class="empty">Sin personas con ese filtro.</td></tr>'}</tbody></table></div></section>`;
+}
+function mpForm(p){
+  const C = S.ma, P = C.per, nuevo = !p;
+  const sel = (id, lbl, opts, val, vacio) => `<div class="field"><label class="lbl" for="${id}">${lbl}</label><select id="${id}">${vacio ? `<option value="">—</option>` : ''}${opts.map(o => `<option value="${esc(o[0])}" ${String(o[0])===String(val ?? '')?'selected':''}>${esc(o[1])}</option>`).join('')}</select></div>`;
+  const extra = `<div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
+    <div class="field" style="grid-column:1/-1"><label class="lbl" for="mp-nombre">Nombre completo</label><input id="mp-nombre" value="${esc(p ? p.nombre : '')}" placeholder="Apellidos y nombres como en Buk"></div>
+    <div class="field"><label class="lbl" for="mp-rut">RUT ${p && p.rut_norm ? '<span class="muted">(registrado, no se cambia)</span>' : ''}</label><input id="mp-rut" value="${esc(p ? (p.rut_norm || '') : '')}" ${p && p.rut_norm ? 'disabled' : 'placeholder="12345678-9"'}></div>
+    ${sel('mp-rol', 'Rol', P.roles.map(r => [r.nombre, r.nombre + ' · ' + (r.nivel || '')]), p ? p.rol : 'Promotor')}
+    ${sel('mp-cat', 'Categoría (promotores)', P.categorias.map(c => [c.id, c.nombre]), p ? p.categoria_id : '', true)}
+    ${sel('mp-rep', 'Reporta a', P.mandos.map(m => [m.id, m.nombre + ' · ' + m.rol]), p ? p.reporta_a_id : '', true)}
+    <div class="field"><label class="lbl" for="mp-ing">Fecha de ingreso</label><input type="date" id="mp-ing" value="${esc(p ? (p.fecha_ingreso || '') : hoyISO())}"></div>
+    <div class="field"><label class="lbl" for="mp-cargo">Cargo para bono (texto Buk)</label><input id="mp-cargo" value="${esc(p ? (p.cargo_bono || '') : '')}"></div></div>`;
+  openModal({title: nuevo ? 'Nueva persona en el maestro' : `Editar · ${p.nombre}`, intro: nuevo ? 'Queda en el maestro de Personas. Para darle una tienda usa luego <b>+ Alta</b> en Cobertura. Si el RUT ya existe inactivo, se reactiva esa persona en vez de duplicarla.' : 'Cambia atributos; la asignación a tiendas vive en Cobertura.', extra, needMotivo: true, confirmLbl: nuevo ? 'Crear persona' : 'Guardar',
+    onConfirm: async (motivo) => {
+      const body = {nombre: $('#mp-nombre').value, rut: $('#mp-rut').disabled ? null : ($('#mp-rut').value || null), rol: $('#mp-rol').value, categoria_id: $('#mp-cat').value || null, reporta_a_id: $('#mp-rep').value || null, fecha_ingreso: $('#mp-ing').value || null, cargo_bono: $('#mp-cargo').value || null, motivo};
+      if (nuevo) { const r = await rpc('cob_persona_crear', {p: body}); toast(r.accion === 'reactivada' ? `Reactivada: ${r.nombre}` : `Creada: ${r.nombre}`); }
+      else { await rpc('mst_persona_editar', {p: Object.assign({id: p.id}, body)}); toast('Persona actualizada'); }
+      C.per = null; S.cob.cat = null; S.cob.loaded = false; await loadPersonas();
+    }});
+}
+function mpEstado(p, activo){
+  const C = S.ma;
+  openModal({title: `${activo ? 'Reactivar' : 'Desactivar'} · ${p.nombre}`, intro: activo ? 'Vuelve a estar disponible para asignar en Cobertura.' : 'Queda inactiva con fecha de término. No se borra; su historial de cobertura y cartas se mantiene.', extra: activo ? '' : `<div class="field"><label class="lbl" for="mp-fin">Fecha de término</label><input type="date" id="mp-fin" value="${hoyISO()}"></div>`, needMotivo: true, confirmLbl: activo ? 'Reactivar' : 'Desactivar',
+    onConfirm: async (motivo) => { await rpc('mst_persona_estado', {p_id: p.id, p_activo: activo, p_fecha: activo ? null : ($('#mp-fin').value || null), p_motivo: motivo}); toast(activo ? 'Persona reactivada' : 'Persona desactivada'); C.per = null; S.cob.cat = null; S.cob.loaded = false; await loadPersonas(); }});
+}
+
+// ----- Maestros › Productos -----
+const TIPO_PROD = {telefono: 'teléfono', no_telefono: 'no teléfono', pendiente: 'pendiente'};
+async function loadProductos(){ const C = S.ma; if (C.prodLoading) return; C.prodLoading = true; renderMain(); try { C.prod = await rpc('mst_productos'); } catch(e) { C.prod = {error: errMsg(e)}; } finally { C.prodLoading = false; renderMain(); } }
+function viewMaProductos(){
+  const C = S.ma, D = C.prod, f = C.prodF, ro = RO(), q = (f.q || '').toLowerCase();
+  if (!D && !C.prodLoading) { setTimeout(loadProductos, 0); return '<div class="empty">Cargando productos…</div>'; }
+  if (C.prodLoading && !D) return '<div class="empty">Cargando productos…</div>';
+  if (D.error) return `<div class="banner bad"><p>${esc(D.error)}</p><button id="mq-retry">Reintentar</button></div>`;
+  const tels = D.modelos.filter(m => m.tipo === 'telefono'), sinTramo = tels.filter(m => !m.tramo_master && m.volumen > 0).length;
+  const head = `<section class="panel"><div class="panel-head"><h2>Productos</h2><button id="mq-refresh">Actualizar</button></div>
+    <div class="statgrid"><div class="stat"><b>${fN(tels.length)}</b><span>modelos teléfono (${fN(D.familias.length)} familias)</span></div><div class="stat"><b>${fN(tels.reduce((s, m) => s + m.n_sku, 0))}</b><span>SKU de teléfono</span></div><div class="stat"><b style="${D.pendientes.length ? 'color:var(--warn)' : ''}">${fN(D.pendientes.length)}</b><span>SKU pendientes de clasificar</span></div><div class="stat"><b style="${D.sin_sku_en_producto.length ? 'color:var(--bad)' : ''}">${fN(D.sin_sku_en_producto.length)}</b><span>detectados sin fila en producto</span></div><div class="stat"><b>${fN(sinTramo)}</b><span>modelos con venta y sin tramo maestro</span></div></div>
+    <p class="hint">El maestro tiene dos niveles: <b>modelo</b> (familia + market name, lo que Portafolio clasifica en tramos y lo que mide la meta) y <b>SKU</b> (el código de cada cadena, lo que viene en el maestro de venta). Un SKU <b>pendiente</b> no cuenta como teléfono hasta que alguien lo clasifique; mientras tanto no suma a mix, cobertura de portafolio ni cierre. Portafolio decide el tramo <i>del período</i>; acá se decide qué es cada cosa.</p>
+    <div class="subtabs"><button data-mqsub="modelos" aria-current="${f.sub==='modelos'}">Modelos</button><button data-mqsub="pendientes" aria-current="${f.sub==='pendientes'}">Pendientes${D.pendientes.length ? ` (${D.pendientes.length})` : ''}</button></div></section>`;
+  if (f.sub === 'pendientes') {
+    const rows = D.pendientes.filter(p => !q || [p.sku, p.cadenas, p.descripcion].some(x => String(x||'').toLowerCase().includes(q)));
+    return head + `<section class="panel"><div class="panel-head"><h2>SKU pendientes de clasificar</h2><input id="mq-q" placeholder="Buscar SKU, cadena, descripción…" value="${esc(f.q)}" style="min-width:240px"></div>
+      <p class="hint">Vienen del maestro de venta (SKU sin family). Regla vigente: los SKU de Paris terminados en 999 con venta 0 y stock negativo no se clasifican como teléfono hasta que Paris confirme la descripción. Clasificar como <b>no teléfono</b> los saca del universo sin inventar un modelo.</p>
+      <div class="tbl tall"><table><thead><tr><th>SKU</th><th>Cadena(s)</th><th>Descripción</th><th class="num">Volumen</th><th class="num">Stock últ.</th><th>Semanas</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
+      ${rows.map(p => `<tr><td><span class="kbd">${esc(p.sku)}</span></td><td>${esc(p.cadenas || '—')}</td><td>${esc(p.descripcion || '')}${!p.descripcion ? '<span class="muted">sin descripción en el maestro</span>' : ''}</td><td class="num">${fN(p.volumen)}</td><td class="num">${fN(p.stock)}</td><td class="muted">${esc(p.primera_wk || '')}${p.ultima_wk && p.ultima_wk !== p.primera_wk ? ' → ' + esc(p.ultima_wk) : ''}</td>${ro ? '' : `<td><div class="rowact"><button class="primary" data-mq-cls="${esc(p.sku)}">Clasificar…</button></div></td>`}</tr>`).join('') || '<tr><td colspan="7" class="empty">Nada pendiente.</td></tr>'}
+      </tbody></table></div>
+      ${D.sin_sku_en_producto.length ? `<h3 style="margin:10px 0 0;font-family:var(--f-display);font-size:15px">Detectados en venta pero sin fila en <span class="kbd">producto</span> <span class="pill bad">${D.sin_sku_en_producto.length}</span></h3><p class="hint">Los crea la próxima carga del maestro de venta (procesar_raw_venta_staging); si persisten, el SKU dejó de venir en el archivo.</p><div class="chips">${D.sin_sku_en_producto.slice(0, 40).map(x => `<span class="pill" title="${esc(x.cadena)} · ${esc(x.descripcion || '')} · ${fN(x.volumen)} u">${esc(x.sku)}</span>`).join('')}</div>` : ''}</section>`;
+  }
+  let rows = D.modelos;
+  if (f.family) rows = rows.filter(m => m.family === f.family);
+  if (q) rows = rows.filter(m => [m.family, m.market_name, m.modelo_tramo, ...(m.skus||[])].some(x => String(x||'').toLowerCase().includes(q)));
+  const fams = [...new Set(D.modelos.map(m => m.family))].sort();
+  const tramoPill = (t) => t == null ? '<span class="muted">—</span>' : `<span class="pill ${t===3?'acc':''}">${TRAMO_LBL[t] || t}</span>`;
+  return head + `<section class="panel"><div class="panel-head"><h2>Modelos</h2><div class="ctrl"><label class="lbl" for="mq-fam">Familia</label><select id="mq-fam"><option value="">Todas</option>${fams.map(x => `<option ${f.family===x?'selected':''}>${esc(x)}</option>`).join('')}</select><input id="mq-q" placeholder="Buscar modelo o SKU…" value="${esc(f.q)}" style="min-width:220px"><span class="muted">${fN(rows.length)}</span></div></div>
+    <div class="tbl tall"><table><thead><tr><th>Familia</th><th>Modelo (market name)</th><th>Tipo</th><th class="num">SKU</th><th class="num">Volumen 2 años</th><th>Última sem.</th><th>Tramo maestro</th><th>Tramo ${esc(D.periodo.nombre || '')}</th><th>MotoTalk</th></tr></thead><tbody>
+    ${rows.slice(0, 500).map(m => `<tr><td>${esc(m.family || '—')}</td><td><b>${esc(m.market_name || '(sin market name)')}</b>${m.modelo_tramo && m.modelo_tramo !== m.market_name ? `<div class="muted" style="font-size:12px">${esc(m.modelo_tramo)}</div>` : ''}</td><td>${m.tipo === 'telefono' ? '<span class="pill ok">teléfono</span>' : '<span class="pill">no teléfono</span>'}</td><td class="num" title="${esc((m.skus||[]).join(', '))}">${m.n_sku}</td><td class="num">${fN(m.volumen)}</td><td class="muted">${m.ultima ? String(m.ultima).slice(0,4) + ' W' + String(m.ultima).slice(4) : '—'}</td><td>${tramoPill(m.tramo_master)}</td><td>${m.tramo_periodo != null ? tramoPill(m.tramo_periodo) + (m.mide_periodo === false ? ' <span class="muted">no mide</span>' : '') : '<span class="muted">—</span>'}</td><td>${m.mototalk ? `<span class="pill">${m.mototalk} nombre${m.mototalk===1?'':'s'}</span>` : '<span class="muted">—</span>'}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">Sin modelos con ese filtro.</td></tr>'}
+    </tbody></table></div>
+    <p class="hint">Cambiar el tramo de un modelo para un período se hace en <b>Portafolio</b>; el tramo maestro (tramo_producto_master) es la referencia que Portafolio copia al abrir un período nuevo.</p></section>`;
+}
+function mqClasificar(sku){
+  const C = S.ma, D = C.prod, p = D.pendientes.find(x => x.sku === sku); if (!p) return;
+  const modelos = D.modelos.filter(m => m.tipo === 'telefono' && m.market_name).map(m => m.market_name).sort();
+  const extra = `<p class="muted" style="margin:0">SKU <span class="kbd">${esc(p.sku)}</span> · ${esc(p.cadenas || '')} · ${esc(p.descripcion || 'sin descripción')} · ${fN(p.volumen)} u</p>
+    <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
+    <div class="field" style="grid-column:1/-1"><label class="lbl" for="mq-tipo">Qué es</label><select id="mq-tipo"><option value="telefono">Teléfono (modelo existente o nuevo)</option><option value="no_telefono">No teléfono (accesorio, tablet, otro)</option></select></div>
+    <div class="field" id="mq-f-fam"><label class="lbl" for="mq-fam2">Familia</label><input id="mq-fam2" list="mq-fams" placeholder="Moto G, Motorola Edge…"><datalist id="mq-fams">${D.familias.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
+    <div class="field" id="mq-f-mn"><label class="lbl" for="mq-mn">Modelo (market name)</label><input id="mq-mn" list="mq-mns" placeholder="moto g86 power 5G"><datalist id="mq-mns">${modelos.map(x => `<option value="${esc(x)}">`).join('')}</datalist><span class="muted" id="mq-mn-hint" style="font-size:12.5px"></span></div></div>`;
+  openModal({title: 'Clasificar SKU', intro: 'Si el market name no existe todavía, <b>nace un modelo nuevo</b> en el maestro y aparecerá en Portafolio sin tramo hasta que se le asigne uno.', extra, needMotivo: true, confirmLbl: 'Clasificar',
+    onConfirm: async (motivo) => {
+      const tipo = $('#mq-tipo').value, body = {sku, tipo, family: $('#mq-fam2').value || null, market_name: $('#mq-mn').value || null, motivo};
+      const r = await rpc('mst_producto_clasificar', {p: body}); toast(r.modelo_nuevo ? `Clasificado · modelo nuevo: ${r.market_name}` : `Clasificado como ${TIPO_PROD[r.tipo]}`); C.prod = null; await loadProductos();
+    }});
+  const tipoSel = $('#mq-tipo'), onTipo = () => { const tel = tipoSel.value === 'telefono'; $('#mq-f-mn').style.display = tel ? '' : 'none'; $('#mq-fam2').placeholder = tel ? 'Moto G, Motorola Edge…' : 'Accessory (por defecto)'; }; tipoSel.onchange = onTipo; onTipo();
+  const mn = $('#mq-mn'); mn.oninput = () => { const v = mn.value.trim(); const ex = D.modelos.find(m => m.market_name === v); $('#mq-mn-hint').textContent = !v ? '' : ex ? `Modelo existente · familia ${ex.family} · ${ex.n_sku} SKU` : 'Modelo nuevo: se crea al clasificar'; if (ex && !$('#mq-fam2').value) $('#mq-fam2').value = ex.family || ''; };
+}
 function bindMaestros(){
   const C = S.ma, M = C.data, on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
   const rt = $('#ma-retry'); if (rt) rt.onclick = () => { C.data = null; loadMaestros(); };
   const rf = $('#ma-refresh'); if (rf) rf.onclick = () => { C.data = null; loadMaestros(); };
   on('[data-masub]', 'click', (e) => { C.sub = e.currentTarget.dataset.masub; renderMain(); });
+  // Personas
+  const pr = $('#mp-retry'); if (pr) pr.onclick = () => { C.per = null; loadPersonas(); };
+  const pf = $('#mp-refresh'); if (pf) pf.onclick = () => { C.per = null; loadPersonas(); };
+  const pq = $('#mp-q'); if (pq) { pq.oninput = (e) => { C.perF.q = e.target.value; }; pq.onchange = () => renderMain(); pq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
+  const pn = $('#mp-nivel'); if (pn) pn.onchange = (e) => { C.perF.nivel = e.target.value; renderMain(); };
+  const pe = $('#mp-estado'); if (pe) pe.onchange = (e) => { C.perF.estado = e.target.value; renderMain(); };
+  const pnew = $('#mp-nueva'); if (pnew) pnew.onclick = () => mpForm(null);
+  on('[data-mp-edit]', 'click', (e) => { const p = (C.per.personas || []).find(x => String(x.id) === e.currentTarget.dataset.mpEdit); if (p) mpForm(p); });
+  on('[data-mp-off]', 'click', (e) => { const p = (C.per.personas || []).find(x => String(x.id) === e.currentTarget.dataset.mpOff); if (p) mpEstado(p, false); });
+  on('[data-mp-on]', 'click', (e) => { const p = (C.per.personas || []).find(x => String(x.id) === e.currentTarget.dataset.mpOn); if (p) mpEstado(p, true); });
+  // Productos
+  const qr = $('#mq-retry'); if (qr) qr.onclick = () => { C.prod = null; loadProductos(); };
+  const qf = $('#mq-refresh'); if (qf) qf.onclick = () => { C.prod = null; loadProductos(); };
+  on('[data-mqsub]', 'click', (e) => { C.prodF.sub = e.currentTarget.dataset.mqsub; C.prodF.q = ''; renderMain(); });
+  const qq = $('#mq-q'); if (qq) { qq.oninput = (e) => { C.prodF.q = e.target.value; }; qq.onchange = () => renderMain(); qq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
+  const qfam = $('#mq-fam'); if (qfam) qfam.onchange = (e) => { C.prodF.family = e.target.value; renderMain(); };
+  on('[data-mq-cls]', 'click', (e) => mqClasificar(e.currentTarget.dataset.mqCls));
   const fc = $('#ma-cuenta'); if (fc) fc.onchange = (e) => { C.f.cuenta = e.target.value; renderMain(); };
   const fv = $('#ma-vig'); if (fv) fv.onchange = (e) => { C.f.vig = e.target.checked; renderMain(); };
   const fa = $('#ma-conalias'); if (fa) fa.onchange = (e) => { C.f.conAlias = e.target.checked; renderMain(); };
@@ -939,7 +1060,8 @@ function fieldHtml(obj, prevObj, k, lbl, kind, extra, opts){
 function viewPortafolio(){
   const b = S.base, w = S.work, pl = prevLbl();
   const sw = `<div class="ctrl" style="margin-bottom:-6px"><label class="lbl" for="v-port">Vista</label><select id="v-port"><option value="nacional" ${S.vistaPort==='nacional'?'selected':''}>Nacional</option><option value="cuenta" ${S.vistaPort==='cuenta'?'selected':''}>Catálogo por cuenta</option></select>${S.vistaPort==='cuenta' ? `<label class="lbl" for="c-cat">Cuenta</label><select id="c-cat">${b.cuentas.filter(c => b.semanas[String(c.id)]).map(c => `<option value="${c.id}" ${String(c.id)===String(S.cuentaCat)?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select>` : ''}</div>`;
-  if (S.vistaPort === 'cuenta') { const cid = S.cuentaCat || (b.cuentas.find(c => b.semanas[String(c.id)]) || {}).id; S.cuentaCat = cid; return sw + panelCatalogo(String(cid)) + panelMotoCuenta(String(cid)); }
+  const mstHint = `<p class="hint" style="margin:0 0 -4px">Los modelos de esta lista salen del maestro de productos. Un SKU nuevo que llegue en el maestro de venta sin clasificar no aparece acá hasta que se clasifique en <a href="#maestros" data-goto-prod>Maestros › Productos</a>.</p>`;
+  if (S.vistaPort === 'cuenta') { const cid = S.cuentaCat || (b.cuentas.find(c => b.semanas[String(c.id)]) || {}).id; S.cuentaCat = cid; return sw + mstHint + panelCatalogo(String(cid)) + panelMotoCuenta(String(cid)); }
   const keys = [...new Set([...Object.keys(b.tramos), ...Object.keys(w.tramos)])].sort((x, y) => { const tx = (w.tramos[x]||b.tramos[x]), ty = (w.tramos[y]||b.tramos[y]); return (ty.tramo - tx.tramo) || x.localeCompare(y); });
   const vis = keys.filter(k => { const t = w.tramos[k]; if (S.tramoFiltro === 'todos' || !t) return true; const exc = Object.keys(t.cuentas||{}).length > 0; return S.tramoFiltro === 'miden' ? (t.mide || exc) : (!t.mide || exc); });
   const nDif = keys.filter(k => w.tramos[k] && b.master[k] && b.master[k].tramo !== w.tramos[k].tramo).length;
@@ -959,7 +1081,7 @@ function viewPortafolio(){
       <td>${RO() ? '' : `<button class="link danger" data-del-tramo="${esc(k)}" aria-label="Quitar ${esc(k)}">Quitar</button>`}</td></tr>`;
   }).join('');
   const nMide = keys.filter(k => w.tramos[k] && w.tramos[k].mide).length, nNo = keys.filter(k => w.tramos[k] && !w.tramos[k].mide).length;
-  return sw + `<section class="panel"><div class="panel-head"><h2>Portafolio de ${esc(perLbl(S.periodo))}</h2>
+  return sw + mstHint + `<section class="panel"><div class="panel-head"><h2>Portafolio de ${esc(perLbl(S.periodo))}</h2>
       <div class="ctrl"><span class="pill ok">${nMide} miden</span><span class="pill">${nNo} no miden</span>${RO() ? '' : `<button id="b-nuevo" class="primary">+ Nuevo modelo</button>`}<label class="lbl" for="f-tramo">Mostrar</label><select id="f-tramo"><option value="miden" ${S.tramoFiltro==='miden'?'selected':''}>Los que miden</option><option value="nomiden" ${S.tramoFiltro==='nomiden'?'selected':''}>Los que no miden</option><option value="todos" ${S.tramoFiltro==='todos'?'selected':''}>Todos</option></select></div></div>
     <p class="hint">Regla nacional, en orden: <b>1</b> ciclo de vida (informativo, no cambia el cálculo) → <b>2</b> si <b>mide</b> y en qué tramo: Base solo suma al Gate; Medio y Alto suman al Gate y a su tramo. Si no mide, no cuenta para nada y su stock entra al <b>ajuste por stock fuera de meta</b> → <b>3</b> si es Super Premium y cuánto paga por unidad (solo Alto). Qué modelos <b>existen</b> en cada cuenta y las excepciones a esta regla se fijan en <b>Catálogo por cuenta</b>. <b>Master</b> es la clasificación que usa el motor de TRADE para decidir con/sin Alto; no se toca desde aquí.${nDif ? ` <span class="pill warn">${nDif} con tramo distinto al master</span>` : ''}</p>
     ${RO() ? '' : addModeloForm()}
@@ -1223,7 +1345,7 @@ function viewMetas(){
   return `<section class="panel"><div class="panel-head"><h2>Metas de ${esc(perLbl(S.periodo))}</h2><div class="ctrl"><button id="b-xls" ${todas.some(f => N(f.meta_total) != null) ? '' : 'disabled'} title="Todas las tiendas del período, con resumen por cuenta y por supervisor">Descargar Excel</button>${tipoSel}<label class="lbl" for="sel-comp">Comparar con</label><select id="sel-comp"><option value="">Sin comparación</option>${compOpts}</select></div></div>
     <div class="statgrid"><div class="stat"><b>${ft === 'con_promotor' ? conCob.length : filas.length}</b><span>${ft === 'con_promotor' ? 'tiendas con cobertura vigente' : 'tiendas ' + (TIPO_LBL[ft] || 'en total').toLowerCase()}</span></div><div class="stat"><b>${conMeta.length}</b><span>con meta ${metodos.length ? '· ' + esc(metodos.map(m => m === 'importada_base_touch' ? 'importada' : m).join(', ')) : ''}${estados.length ? ' · ' + esc(estados.join(', ')) : ''}</span></div><div class="stat"><b>${fN(tot('meta_total', filas))}</b><span>unidades de meta total${sA ? ` · ${fN(tot('meta_total', filas) / sA)} por semana (${sA} sem)` : ''}</span></div><div class="stat"><b>${comp ? fN(totComp) : '—'}</b><span>${comp ? 'meta de ' + esc(perLbl(comp)) + ' en esas tiendas' + (sB ? ` · ${fN(totComp / sB)} por semana (${sB} sem)` : '') : 'sin comparación'}</span></div></div>
     ${!conMeta.length ? `<div class="banner warn"><p>${esc(perLbl(S.periodo))} todavía no tiene metas en TRADE. Importa la Base de trabajo de Touch o genera con el motor de TRADE.</p></div>` : ''}
-    ${S.importAviso ? `<div class="banner warn"><p>${esc(S.importAviso)}</p></div>` : ''}
+    ${S.importAviso ? `<div class="banner warn"><p>${esc(S.importAviso)}</p>${S.importSinMatch ? '<button id="b-alias">Resolver en Maestros</button>' : ''}</div>` : ''}
   </section>
   ${RO() ? '' : `<section class="panel"><div class="panel-head"><h2>Cargar metas</h2></div>
     <div class="two">
@@ -1313,6 +1435,7 @@ function bind(tab){
   const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
   if (tab === 'maestros') { if (S.ma.data) bindMaestros(); return; }
   if (tab === 'portafolio') {
+    on('[data-goto-prod]', 'click', (e) => { e.preventDefault(); S.ma.sub = 'productos'; location.hash = '#maestros'; renderTabs(); renderMain(); });
     const ft = $('#f-tramo'); if (ft) ft.onchange = (e) => { S.tramoFiltro = e.target.value; renderMain(); };
     const vp = $('#v-port'); if (vp) vp.onchange = (e) => { S.vistaPort = e.target.value; renderMain(); };
     const cc = $('#c-cat'); if (cc) cc.onchange = (e) => { S.cuentaCat = e.target.value; renderMain(); };
@@ -1368,6 +1491,7 @@ function bind(tab){
     const bx = $('#b-xls'); if (bx) bx.onclick = exportMetas;
     const bg = $('#b-generar'); if (bg) bg.onclick = actGenerar; const bcf = $('#b-confirmar'); if (bcf) bcf.onclick = actConfirmarMetas;
     const ft2 = $('#f-tam'); if (ft2) ft2.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; try { S.tamAviso = await cargarTam(f); } catch(err) { S.tamAviso = {bad: true, txt: esc(err.message || String(err))}; } changed(); };
+    const bal = $('#b-alias'); if (bal) bal.onclick = () => { S.ma.sub = 'probar'; S.ma.txt = String(S.importSinMatch || '').split(/,\s*/).join('\n'); S.ma.res = null; location.hash = '#maestros'; renderTabs(); renderMain(); setTimeout(() => { const b = $('#ma-resolver'); if (b) b.click(); }, 300); };
     const fx = $('#f-xlsx'); if (fx) fx.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; S.importError = null; S.importAviso = null; try { if (typeof XLSX === 'undefined') throw new Error('La librería de Excel no cargó; recarga la página.'); S.importPrev = await readBase(f); if (!S.importPrev.filas.length) throw new Error('No encontré tiendas con meta en el archivo.'); } catch(err) { S.importPrev = null; S.importError = err.message || String(err); } renderMain(); };
     const bi = $('#b-import'); if (bi) bi.onclick = () => actImportar(S.importPrev);
     on('[data-ovr]', 'change', (e) => { const [k, id] = e.target.dataset.ovr.split('|'); const o = S.work[k][id]; if (e.target.dataset.f === 'valor') o.valor = e.target.value === '' ? null : +e.target.value; else o.motivo = e.target.value; changed(); });
