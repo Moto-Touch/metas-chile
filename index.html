@@ -538,7 +538,7 @@ async function loadCob(){
     const A = {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre};
     const [estado, cat, pend, diff] = await Promise.all([rpc('cob_estado', A), rpc('cob_catalogo'), rpc('cob_pendientes'), rpc('cob_diff_firme', A)]);
     C.estado = estado; C.cat = cat; C.pend = (pend || []).map(r => r.evento || r); C.diff = diff || [];
-    C.vigente = await rpc('cob_vigente', {p_fecha: estado.fecha_ref});
+    C.vigente = await rpc('cob_vigente', {p_fecha: estado.fecha_ref, p_anio: S.periodo.anio, p_periodo: S.periodo.nombre});
     C.loaded = true;
   } catch(e) { C.error = errMsg(e); }
   finally { C.loading = false; renderMain(); }
@@ -560,6 +560,7 @@ function viewCobertura(){
       <div class="stat"><b class="${+E.metas_con_promotor_sin_persona ? 'muted' : ''}" style="${+E.metas_con_promotor_sin_persona ? 'color:var(--bad)' : ''}">${fN(E.metas_con_promotor_sin_persona)}</b><span>metas con promotor sin persona ni vacante</span></div>
       <div class="stat"><b style="${+E.rutas_sin_par ? 'color:var(--warn)' : ''}">${fN(E.rutas_sin_par)}</b><span>filas de ruta sin par</span></div>
       <div class="stat"><b>${fN(E.tiendas_doble)}</b><span>tiendas con doble cobertura</span></div>
+      <div class="stat"><b style="${C.vigente.some(r => r.supervisor_difiere) ? 'color:var(--warn)' : ''}">${fN(C.vigente.filter(r => r.supervisor_difiere).length)}</b><span>filas cuyo supervisor cambió desde que se abrieron</span></div>
     </div>
     <div class="chips">${(E.cupos_por_cuenta || []).map(c => `<span class="pill">${esc(c.cuenta)} <b>${nf1.format(+c.cupos)}</b> · ${c.tiendas} t</span>`).join('')}</div>
     ${C.error ? `<div class="banner bad"><p>${esc(C.error)}</p></div>` : ''}
@@ -569,7 +570,7 @@ function viewCobertura(){
 }
 function viewCobMapa(){
   const C = S.cob, f = C.filtro, q = (f.q || '').toLowerCase(), cuentas = [...new Set(C.vigente.map(r => r.cuenta))].sort();
-  const vac = ((C.cat && C.cat.vacantes) || []).map(v => ({vac: v, cuenta: v.cuenta, tienda: v.tienda, tienda_id: v.tienda_id, persona: 'POR DEFINIR', tipo_cobertura: v.modalidad, jornada: v.jornada, cupo_valor: (v.jornada !== 'FULL TIME' || v.modalidad === 'Ruta') ? 0.5 : 1, fecha_inicio: v.desde}));
+  const vac = ((C.cat && C.cat.vacantes) || []).map(v => ({vac: v, cuenta: v.cuenta, tienda: v.tienda, tienda_id: v.tienda_id, persona: 'POR DEFINIR', tipo_cobertura: v.modalidad, jornada: v.jornada, cupo_valor: (v.jornada !== 'FULL TIME' || v.modalidad === 'Ruta') ? 0.5 : 1, fecha_inicio: v.desde, supervisor: (C.vigente.find(x => x.tienda_id === v.tienda_id) || {}).supervisor || null}));
   let rows = [...C.vigente, ...vac];
   if (f.cuenta) rows = rows.filter(r => r.cuenta === f.cuenta);
   if (q) rows = rows.filter(r => [r.tienda, r.persona, r.supervisor, r.rut_norm].some(x => (x || '').toLowerCase().includes(q)));
@@ -578,19 +579,20 @@ function viewCobMapa(){
   if (f.estado === 'sinpar') rows = rows.filter(r => r.par_ruta_ok === false);
   if (f.estado === 'doble') rows = rows.filter(r => r.doble);
   if (f.estado === 'pt') rows = rows.filter(r => r.jornada !== 'FULL TIME');
+  if (f.estado === 'supdif') rows = rows.filter(r => r.supervisor_difiere);
   rows.sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.tienda.localeCompare(b.tienda) || (a.persona || '').localeCompare(b.persona || ''));
   const ro = RO();
   const acts = (r) => ro ? '' : r.vac
     ? `<div class="rowact"><button data-ev="vacante_cubre" data-vac="${r.vac.id}">Cubrir</button><button data-ev="correccion_vac" data-vac="${r.vac.id}" class="danger">Cancelar vacante</button></div>`
     : `<div class="rowact"><button data-ev="traslado" data-row="${r.planificacion_id}">Trasladar</button>${r.tipo_cobertura === 'Ruta' ? `<button data-ev="ruta_fijo" data-row="${r.planificacion_id}">Quedarse fijo aquí</button><button data-ev="ruta_ruta" data-row="${r.planificacion_id}">Cambiar esta tienda</button>` : `<button data-ev="fijo_ruta" data-row="${r.planificacion_id}">Pasar a ruta</button>`}<button data-ev="cambio_jornada" data-row="${r.planificacion_id}">Jornada</button><button data-ev="licencia" data-row="${r.planificacion_id}">Licencia</button><button data-ev="baja" data-row="${r.planificacion_id}" class="danger">Baja</button></div>`;
   const flag = (r) => r.vac ? '<span class="pill warn">vacante</span>' : [r.par_ruta_ok === false ? '<span class="pill warn">ruta sin par</span>' : '', r.doble ? '<span class="pill acc">doble</span>' : ''].join(' ');
-  return `<section class="panel"><div class="panel-head"><h2>Mapa de cobertura</h2><span class="muted">${rows.length} filas · persona × tienda vigente al ${esc(fDate((C.estado||{}).fecha_ref))}. Cada acción crea un evento <i>propuesto</i>; se aplica desde Pendientes.</span></div>
+  return `<section class="panel"><div class="panel-head"><h2>Mapa de cobertura</h2><span class="muted">${rows.length} filas · persona × tienda vigente al ${esc(fDate((C.estado||{}).fecha_ref))}. Supervisor = el de la tienda en el período (archivo de metas). Cada acción crea un evento <i>propuesto</i>; se aplica desde Pendientes.</span></div>
     <div class="ctrl"><label class="lbl" for="cob-cuenta">Cuenta</label><select id="cob-cuenta"><option value="">Todas</option>${cuentas.map(c => `<option ${f.cuenta===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
-      <label class="lbl" for="cob-estado">Ver</label><select id="cob-estado"><option value="">Todo</option><option value="vacante" ${f.estado==='vacante'?'selected':''}>Vacantes</option><option value="ruta" ${f.estado==='ruta'?'selected':''}>Rutas</option><option value="sinpar" ${f.estado==='sinpar'?'selected':''}>Rutas sin par</option><option value="doble" ${f.estado==='doble'?'selected':''}>Doble cobertura</option><option value="pt" ${f.estado==='pt'?'selected':''}>Part time</option></select>
+      <label class="lbl" for="cob-estado">Ver</label><select id="cob-estado"><option value="">Todo</option><option value="vacante" ${f.estado==='vacante'?'selected':''}>Vacantes</option><option value="ruta" ${f.estado==='ruta'?'selected':''}>Rutas</option><option value="sinpar" ${f.estado==='sinpar'?'selected':''}>Rutas sin par</option><option value="doble" ${f.estado==='doble'?'selected':''}>Doble cobertura</option><option value="pt" ${f.estado==='pt'?'selected':''}>Part time</option><option value="supdif" ${f.estado==='supdif'?'selected':''}>Supervisor cambió</option></select>
       <input id="cob-q" placeholder="Buscar tienda, persona, supervisor…" value="${esc(f.q)}" style="min-width:240px">
       <span class="grow"></span>${ro ? '' : '<button data-ev="alta">+ Alta</button><button data-ev="vacante_abre">+ Abrir vacante</button>'}</div>
     <div class="tbl tall"><table><thead><tr><th>Cuenta</th><th>Tienda</th><th>Persona</th><th>Modalidad</th><th>Jornada</th><th class="num">Cupo</th><th>Supervisor</th><th>Desde</th><th></th>${ro ? '' : '<th>Acciones</th>'}</tr></thead><tbody>
-    ${rows.map(r => `<tr class="${r.vac ? 'vac' : ''}"><td>${esc(r.cuenta)}</td><td>${esc(r.tienda)}</td><td>${esc(r.persona)}${r.rut_norm ? '' : ''}</td><td>${esc(r.tipo_cobertura || '—')}</td><td>${esc(r.jornada || '—')}</td><td class="num">${nf1.format(+r.cupo_valor || 0)}</td><td class="muted">${esc(r.supervisor || '—')}</td><td class="num" title="${r.dias_desde != null ? r.dias_desde + ' días' : ''}">${esc(fDate(r.fecha_inicio))}</td><td>${flag(r)}</td>${ro ? '' : `<td>${acts(r)}</td>`}</tr>`).join('') || '<tr><td colspan="10" class="empty">Sin filas con ese filtro.</td></tr>'}
+    ${rows.map(r => `<tr class="${r.vac ? 'vac' : ''}"><td>${esc(r.cuenta)}</td><td>${esc(r.tienda)}</td><td>${esc(r.persona)}${r.rut_norm ? '' : ''}</td><td>${esc(r.tipo_cobertura || '—')}</td><td>${esc(r.jornada || '—')}</td><td class="num">${nf1.format(+r.cupo_valor || 0)}</td><td class="muted" title="${esc(r.vac ? 'Supervisor de la tienda en ' + perLbl(S.periodo) : 'Supervisor de la tienda en ' + perLbl(S.periodo) + ' (archivo de metas). Al abrir la fila: ' + (r.supervisor_hist || '—'))}">${esc(r.supervisor || '—')}${r.supervisor_difiere ? ` <span class="pill warn" title="Al abrirse la fila el supervisor era ${esc(r.supervisor_hist || '—')}">antes ${esc(r.supervisor_hist || '—')}</span>` : ''}</td><td class="num" title="${r.dias_desde != null ? r.dias_desde + ' días' : ''}">${esc(fDate(r.fecha_inicio))}</td><td>${flag(r)}</td>${ro ? '' : `<td>${acts(r)}</td>`}</tr>`).join('') || '<tr><td colspan="10" class="empty">Sin filas con ese filtro.</td></tr>'}
     </tbody></table></div></section>`;
 }
 function viewCobPend(){
@@ -625,20 +627,19 @@ function cobForm(tipo, ctx){
   const selT = (id, val, lbl) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}"><option value="">—</option>${cat.tiendas.map(t => `<option value="${t.id}" ${String(t.id)===String(val)?'selected':''}>${esc(t.cuenta)} · ${esc(t.nombre)}</option>`).join('')}</select></div>`;
   const selP = (id, val, lbl, soloLibres) => `<div class="f"><label class="lbl" for="${id}">${lbl}</label><select id="${id}"><option value="">—</option>${cat.personas.filter(p => !soloLibres || !p.vigente).map(p => `<option value="${p.id}" ${String(p.id)===String(val)?'selected':''}>${esc(p.nombre)}${p.rol ? ' · ' + esc(p.rol) : ''}${p.vigente ? ' (con tienda)' : ''}</option>`).join('')}</select></div>`;
   const selJ = (val, lbl) => `<div class="f"><label class="lbl" for="e-jor">${lbl || 'Jornada'}</label><select id="e-jor"><option value="">— sin cambio —</option>${JORNADAS.map(j => `<option ${j===val?'selected':''}>${j}</option>`).join('')}</select></div>`;
-  const selS = (val) => `<div class="f"><label class="lbl" for="e-sup">Supervisor</label><select id="e-sup"><option value="">— sin cambio —</option>${cat.supervisores.map(s => `<option value="${s.id}" ${String(s.id)===String(val)?'selected':''}>${esc(s.nombre)}</option>`).join('')}</select></div>`;
   const fecha = (lbl, val) => `<div class="f"><label class="lbl" for="e-fecha">${lbl || 'Fecha de efecto'}</label><input type="date" id="e-fecha" value="${val || hoyISO()}"></div>`;
   const fecha2 = () => `<div class="f"><label class="lbl" for="e-fecha2">Hasta</label><input type="date" id="e-fecha2"></div>`;
   const doc = () => `<div class="f"><label class="lbl" for="e-doc">Documento / respaldo</label><input id="e-doc" placeholder="correo, archivo, WK…"></div>`;
   const quien = row ? `<p class="muted" style="margin:0"><b>${esc(row.persona)}</b> · ${esc(row.cuenta)} ${esc(row.tienda)} · ${esc(row.tipo_cobertura)} ${esc(row.jornada)} · desde ${esc(fDate(row.fecha_inicio))}</p>` : '';
   let title = EV_LBL[tipo] || tipo, html = '', build;
-  const base = () => ({tipo, persona_id: row ? row.persona_id : null, fecha_efecto: $('#e-fecha').value, documento_ref: ($('#e-doc') || {}).value || null, supervisor_id: ($('#e-sup') || {}).value || null});
+  const base = () => ({tipo, persona_id: row ? row.persona_id : null, fecha_efecto: $('#e-fecha').value, documento_ref: ($('#e-doc') || {}).value || null});
   const v = (id) => { const el = $(id); return el && el.value !== '' ? el.value : null; };
   switch (tipo) {
-    case 'alta': html = `<div class="frm">${selP('e-per', null, 'Persona', false)}${selT('e-t1', null, 'Tienda')}${selT('e-t2', null, 'Segunda tienda (solo si es ruta)')}${selJ('FULL TIME')}${selS()}${fecha()}${doc()}</div>`;
+    case 'alta': html = `<div class="frm">${selP('e-per', null, 'Persona', false)}${selT('e-t1', null, 'Tienda')}${selT('e-t2', null, 'Segunda tienda (solo si es ruta)')}${selJ('FULL TIME')}${fecha()}${doc()}</div>`;
       build = () => Object.assign(base(), {persona_id: v('#e-per'), tienda_destino_id: v('#e-t1'), tienda_destino2_id: v('#e-t2'), modalidad_nueva: v('#e-t2') ? 'Ruta' : 'Fijo', jornada_nueva: v('#e-jor') || 'FULL TIME'}); break;
     case 'baja': title = 'Dar de baja'; html = quien + `<div class="frm"><div class="f"><label class="lbl">Alcance</label><select id="e-alc"><option value="una">Solo esta tienda</option><option value="todas">Todas sus tiendas (sale de la FF)</option></select></div>${fecha('Último día trabajado + 1 (fecha desde la que ya no está)')}${doc()}</div>`;
       build = () => Object.assign(base(), {tienda_origen_id: v('#e-alc') === 'todas' ? null : row.tienda_id}); break;
-    case 'traslado': html = quien + `<div class="frm">${selT('e-t1', null, 'Tienda destino')}${selJ(null)}${selS()}${fecha()}${doc()}</div>`;
+    case 'traslado': html = quien + `<div class="frm">${selT('e-t1', null, 'Tienda destino')}${selJ(null)}${fecha()}${doc()}</div>`;
       build = () => Object.assign(base(), {tienda_origen_id: row.tienda_id, tienda_destino_id: v('#e-t1'), jornada_nueva: v('#e-jor')}); break;
     case 'fijo_ruta': title = 'Pasar a ruta (Fijo → Ruta)'; html = quien + `<p class="hint">Se mantiene en ${esc(row.tienda)} y suma una segunda tienda; ambas quedan Ruta 0,5 con el mismo evento.</p><div class="frm">${selT('e-t1', null, 'Tienda B (segunda de la ruta)')}${fecha()}${doc()}</div>`;
       build = () => Object.assign(base(), {tipo: 'cambio_modalidad', modalidad_nueva: 'Ruta', tienda_origen_id: row.tienda_id, tienda_destino_id: v('#e-t1')}); break;
@@ -652,7 +653,7 @@ function cobForm(tipo, ctx){
       build = () => Object.assign(base(), {fecha_fin_efecto: v('#e-fecha2')}); break;
     case 'vacante_abre': html = `<div class="frm">${selT('e-t1', null, 'Tienda')}<div class="f"><label class="lbl" for="e-mod">Modalidad prevista</label><select id="e-mod"><option>Fijo</option><option>Ruta</option></select></div>${selJ('FULL TIME', 'Jornada prevista')}${fecha('Vacante desde')}${doc()}</div>`;
       build = () => Object.assign(base(), {tienda_destino_id: v('#e-t1'), modalidad_nueva: v('#e-mod'), jornada_nueva: v('#e-jor') || 'FULL TIME'}); break;
-    case 'vacante_cubre': { const vac = ctx.vac; title = `Cubrir vacante · ${vac.cuenta} ${vac.tienda}`; html = `<p class="muted" style="margin:0">Vacante ${esc(vac.modalidad)} ${esc(vac.jornada)} abierta desde ${esc(fDate(vac.desde))} · ${esc(vac.motivo)}</p><div class="frm">${selP('e-per', null, 'Persona que la cubre', false)}${selT('e-t0', null, 'Si viene de otra tienda, ¿cuál deja?')}${vac.modalidad === 'Ruta' ? selT('e-t2', null, 'Segunda tienda de la ruta') : ''}${selJ(vac.jornada)}${selS()}${fecha()}${doc()}</div>`;
+    case 'vacante_cubre': { const vac = ctx.vac; title = `Cubrir vacante · ${vac.cuenta} ${vac.tienda}`; html = `<p class="muted" style="margin:0">Vacante ${esc(vac.modalidad)} ${esc(vac.jornada)} abierta desde ${esc(fDate(vac.desde))} · ${esc(vac.motivo)}</p><div class="frm">${selP('e-per', null, 'Persona que la cubre', false)}${selT('e-t0', null, 'Si viene de otra tienda, ¿cuál deja?')}${vac.modalidad === 'Ruta' ? selT('e-t2', null, 'Segunda tienda de la ruta') : ''}${selJ(vac.jornada)}${fecha()}${doc()}</div>`;
       build = () => Object.assign(base(), {persona_id: v('#e-per'), vacante_id: vac.id, tienda_origen_id: v('#e-t0'), tienda_destino2_id: v('#e-t2'), jornada_nueva: v('#e-jor')}); break; }
     case 'correccion_vac': { const vac = ctx.vac; title = `Cancelar vacante · ${vac.cuenta} ${vac.tienda}`; html = `<p class="hint">La vacante queda <i>cancelada</i> (no se borra). Úsalo cuando la tienda pasa a quedar sin promotor.</p><div class="frm">${fecha('Cancelada desde')}${doc()}</div>`;
       build = () => Object.assign(base(), {tipo: 'correccion', vacante_id: vac.id}); break; }
