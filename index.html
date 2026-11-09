@@ -185,7 +185,7 @@ const S = {
   metas: null, compPeriodo: null, metasFiltro: {cuenta:'', q:''}, margen: 0,
   check: null, foto: null, offReason: '', loadError: null,
   tramoFiltro: 'miden', vistaPort: 'nacional', cuentaCat: '', busy: false, importPrev: null,
-  cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}},
+  cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}, gv: null, gvLoading: false},
 };
 
 // ---------- utilidades ----------
@@ -543,7 +543,7 @@ async function loadCob(){
   } catch(e) { C.error = errMsg(e); }
   finally { C.loading = false; renderMain(); }
 }
-function cobReload(){ S.cob.sel = {}; return loadCob(); }
+function cobReload(){ S.cob.sel = {}; S.cob.gv = null; return loadCob(); }
 function viewCobertura(){
   const C = S.cob;
   if (!C.loaded && !C.loading && !C.error) { setTimeout(loadCob, 0); return '<div class="empty">Cargando cobertura…</div>'; }
@@ -564,9 +564,9 @@ function viewCobertura(){
     </div>
     <div class="chips">${(E.cupos_por_cuenta || []).map(c => `<span class="pill">${esc(c.cuenta)} <b>${nf1.format(+c.cupos)}</b> · ${c.tiendas} t</span>`).join('')}</div>
     ${C.error ? `<div class="banner bad"><p>${esc(C.error)}</p></div>` : ''}
-    <div class="subtabs"><button data-sub="mapa" aria-current="${C.sub==='mapa'}">Mapa</button><button data-sub="pendientes" aria-current="${C.sub==='pendientes'}">Pendientes${nP ? ` (${nP})` : ''}</button><button data-sub="firmar" aria-current="${C.sub==='firmar'}">Firmar período${+E.diff_vs_firme ? ` (${E.diff_vs_firme})` : ''}</button><span class="grow"></span><button id="cob-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div>
+    <div class="subtabs"><button data-sub="mapa" aria-current="${C.sub==='mapa'}">Mapa</button><button data-sub="pendientes" aria-current="${C.sub==='pendientes'}">Pendientes${nP ? ` (${nP})` : ''}</button><button data-sub="firmar" aria-current="${C.sub==='firmar'}">Firmar período${+E.diff_vs_firme ? ` (${E.diff_vs_firme})` : ''}</button><button data-sub="gv" aria-current="${C.sub==='gv'}">GeoVictoria${C.gv ? ` (${(C.gv.sin_persona||[]).length + (C.gv.inactivas_marcando||[]).length + (C.gv.activas_sin_tienda||[]).filter(x => x.marca_hoy).length + (C.gv.planificadas_sin_marca||[]).length})` : ''}</button><span class="grow"></span><button id="cob-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div>
   </section>`;
-  return kpi + ({mapa: viewCobMapa, pendientes: viewCobPend, firmar: viewCobFirmar}[C.sub] || viewCobMapa)();
+  return kpi + ({mapa: viewCobMapa, pendientes: viewCobPend, firmar: viewCobFirmar, gv: viewCobGV}[C.sub] || viewCobMapa)();
 }
 function viewCobMapa(){
   const C = S.cob, f = C.filtro, q = (f.q || '').toLowerCase(), cuentas = [...new Set(C.vigente.map(r => r.cuenta))].sort();
@@ -621,6 +621,34 @@ function viewCobFirmar(){
     ${ro || !D.length ? '' : `<div class="actions"><button id="cob-firmar" class="primary" ${pa ? 'disabled' : ''}>Firmar cobertura${F ? ' como v' + (F.version + 1) : ' v1'}</button></div>`}
   </section>`;
 }
+// cruce con GeoVictoria (asistencia real) → cob_gv_cruce
+async function loadGV(){ const C = S.cob; if (C.gvLoading) return; C.gvLoading = true; renderMain(); try { C.gv = await rpc('cob_gv_cruce', {p_dias: 30, p_sin_marca_dias: 14}); } catch(e) { C.gv = {error: errMsg(e)}; } finally { C.gvLoading = false; renderMain(); } }
+function viewCobGV(){
+  const C = S.cob, G = C.gv, ro = RO();
+  if (!G && !C.gvLoading) { setTimeout(loadGV, 0); return '<div class="empty">Cruzando con GeoVictoria…</div>'; }
+  if (C.gvLoading) return '<div class="empty">Cruzando con GeoVictoria…</div>';
+  if (G.error) return `<div class="banner bad"><p>${esc(G.error)}</p></div>`;
+  const R = G.resumen || {}, vig = (pid) => C.vigente.filter(r => String(r.persona_id) === String(pid));
+  const tbl = (rows, cols, actFn) => rows.length ? `<div class="tbl"><table><thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}${ro ? '' : '<th></th>'}</tr></thead><tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c[2]||''}">${c[1](r)}</td>`).join('')}${ro ? '' : `<td><div class="rowact">${actFn(r)}</div></td>`}</tr>`).join('')}</tbody></table></div>` : '<p class="hint"><span class="pill ok">nada pendiente</span></p>';
+  const D = (s) => esc(fDate(s)), hoy = (r) => r.ultima >= G.hasta ? '<span class="pill ok">marca hoy</span>' : `<span class="pill">hasta ${D(r.ultima)}</span>`;
+  return `<section class="panel"><div class="panel-head"><h2>Cobertura planificada vs asistencia GeoVictoria</h2><span class="muted">Marcas ${D(G.desde)} → ${D(G.hasta)} · solo grupos <span class="kbd">MOTOROLA*</span> (MOBZI es canal propio, excluido) · ${R.ruts_gv} RUT marcan · ${R.en_trade_vigentes} con tienda vigente en TRADE</span></div>
+    <div class="chips">${(G.grupos || []).map(g => `<span class="pill">${esc(g)}</span>`).join('')}<span class="grow"></span><button id="gv-refresh">Actualizar</button></div>
+
+    <h3 style="margin:6px 0 0;font-family:var(--f-display);font-size:15px">Marcan y no existen en TRADE <span class="pill warn">${(G.sin_persona||[]).length}</span></h3>
+    <p class="hint">Personas con asistencia real que no están en el maestro. <b>Dar de alta</b> crea la persona con nombre y RUT de GeoVictoria y abre el evento de alta en tienda.</p>
+    ${tbl(G.sin_persona || [], [['Nombre (GeoVictoria)', r => esc(r.nombre)], ['Grupo', r => esc(r.grupo)], ['Cargo', r => esc(r.cargo || '')], ['Primera', r => D(r.primera), 'num'], ['Última', r => hoy(r)], ['Días', r => r.dias, 'num']], r => `<button data-gv="alta-nueva" data-rut="${esc(r.rut)}" data-nombre="${esc(r.nombre)}">Dar de alta</button>`)}
+
+    <h3 style="margin:6px 0 0;font-family:var(--f-display);font-size:15px">Inactivas en TRADE pero siguen marcando <span class="pill warn">${(G.inactivas_marcando||[]).length}</span></h3>
+    ${tbl(G.inactivas_marcando || [], [['Nombre (GeoVictoria)', r => esc(r.nombre)], ['En TRADE', r => esc(r.nombre_trade), 'muted'], ['Grupo', r => esc(r.grupo)], ['Última', r => hoy(r)], ['Días', r => r.dias, 'num']], r => `<button data-gv="alta-nueva" data-rut="${esc(r.rut)}" data-nombre="${esc(r.nombre)}">Reactivar y dar de alta</button>`)}
+
+    <h3 style="margin:6px 0 0;font-family:var(--f-display);font-size:15px">Activas sin tienda vigente <span class="pill">${(G.activas_sin_tienda||[]).length}</span> · ${(G.activas_sin_tienda||[]).filter(x => x.marca_hoy).length} siguen marcando</h3>
+    <p class="hint">Las que dejaron de marcar al 04–06 nov son las salidas de la reducción (ya cerradas en planificación). Las que <b>siguen marcando</b> son cobertura real sin planificar.</p>
+    ${tbl((G.activas_sin_tienda || []).slice().sort((a, b) => (b.marca_hoy - a.marca_hoy) || (a.nombre > b.nombre ? 1 : -1)), [['Nombre', r => esc(r.nombre_trade || r.nombre)], ['Grupo', r => esc(r.grupo)], ['Última marca', r => r.marca_hoy ? '<span class="pill warn">sigue marcando</span> ' + D(r.ultima) : D(r.ultima)], ['Días', r => r.dias, 'num']], r => r.marca_hoy ? `<button data-gv="alta-existente" data-pid="${r.persona_id}">Asignar tienda</button>` : `<span class="muted">sin acción</span>`)}
+
+    <h3 style="margin:6px 0 0;font-family:var(--f-display);font-size:15px">Planificadas sin marca en 14 días <span class="pill ${(G.planificadas_sin_marca||[]).length ? 'bad' : 'ok'}">${(G.planificadas_sin_marca||[]).length}</span></h3>
+    ${tbl(G.planificadas_sin_marca || [], [['Persona', r => esc(r.nombre)], ['Tienda(s) en TRADE', r => esc(r.tiendas)], ['Última marca', r => r.ultima ? D(r.ultima) : '<span class="pill bad">nunca</span>']], r => { const v = vig(r.persona_id)[0]; return v ? `<button data-ev="licencia" data-row="${v.planificacion_id}">Licencia</button><button data-ev="baja" data-row="${v.planificacion_id}" class="danger">Baja</button>` : ''; })}
+  </section>`;
+}
 // alta de persona (inline en un evento o sola) → cob_persona_crear
 function personaFields(hidden){
   const cat = S.cob.cat || {categorias: [], roles: []};
@@ -630,7 +658,7 @@ function personaFields(hidden){
     <div class="f"><label class="lbl" for="np-rol">Rol</label><select id="np-rol">${(cat.roles || []).map(r => `<option ${r.nombre==='Promotor'?'selected':''}>${esc(r.nombre)}</option>`).join('')}</select></div>
     <div class="f"><label class="lbl" for="np-cat">Categoría (promotores)</label><select id="np-cat"><option value="">—</option>${(cat.categorias || []).map(c => `<option value="${c.id}" ${c.nombre==='Captador C'?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div>
     <div class="f"><label class="lbl" for="np-ing">Fecha de ingreso</label><input type="date" id="np-ing" value="${hoyISO()}"></div>
-    <p class="hint" style="grid-column:1/-1;margin:0">Si el RUT ya existe inactivo, se reactiva esa misma persona (no se duplica). Sin RUT se crea igual y queda marcada para completar.</p></div>`;
+    <p class="hint" id="np-gv" style="grid-column:1/-1;margin:0">Al escribir el RUT se consulta GeoVictoria y se completa el nombre. Si el RUT ya existe inactivo, se reactiva esa misma persona (no se duplica). Sin RUT se crea igual.</p></div>`;
 }
 async function personaCrearDesdeForm(motivo){
   const nombre = ($('#np-nombre') || {}).value || '', rut = ($('#np-rut') || {}).value || '';
@@ -639,7 +667,17 @@ async function personaCrearDesdeForm(motivo){
   toast(`Persona ${r.accion}: ${r.nombre}`);
   return r.id;
 }
-function bindPersonaSel(){ document.querySelectorAll('[data-persona-sel]').forEach(s => s.onchange = () => { const np = $('#np'); if (np) np.hidden = s.value !== '__nueva__'; }); }
+function bindPersonaSel(){
+  document.querySelectorAll('[data-persona-sel]').forEach(s => s.onchange = () => { const np = $('#np'); if (np) np.hidden = s.value !== '__nueva__'; });
+  const rut = $('#np-rut'); if (rut) rut.onchange = async () => { const v = rut.value.trim(), h = $('#np-gv'); if (!v || !h) return; h.textContent = 'Consultando GeoVictoria…';
+    try { const g = await rpc('cob_gv_persona', {p_rut: v }); if (!g) { h.innerHTML = '<span class="pill warn">sin marcas en GeoVictoria (60 días)</span> Se puede crear igual.'; return; }
+      const nm = $('#np-nombre'); if (nm && !nm.value.trim()) nm.value = g.nombre || ''; h.innerHTML = `<span class="pill ok">GeoVictoria</span> ${esc(g.nombre)} · ${esc(g.grupo || '')} · ${esc(g.cargo || '')} · marca desde ${esc(fDate(g.primera_marca))} hasta ${esc(fDate(g.ultima_marca))} (${g.dias_60} días)${g.ff_motorola ? '' : ' · <b>no es grupo Motorola</b>'}`; }
+    catch(e) { h.textContent = errMsg(e); } };
+}
+function cobPrefill(pre){
+  if (!pre) return;
+  const sel = $('#e-per'); if (sel) { if (pre.persona_id) sel.value = String(pre.persona_id); else { sel.value = '__nueva__'; const np = $('#np'); if (np) np.hidden = false; const nm = $('#np-nombre'), rt = $('#np-rut'); if (nm) nm.value = pre.nombre || ''; if (rt) { rt.value = pre.rut || ''; if (rt.value) rt.onchange(); } } }
+}
 function cobPersonaSola(){
   openModal({title: 'Alta de persona', intro: 'Queda en el maestro de personas; para asignarla a una tienda usa luego <b>+ Alta</b> o <b>Cubrir</b> en una vacante.', extra: personaFields(false), needMotivo: true, confirmLbl: 'Crear persona',
     onConfirm: async (motivo) => { await personaCrearDesdeForm(motivo); await cobReload(); }});
@@ -693,7 +731,7 @@ function cobForm(tipo, ctx){
     await rpc('cob_evento_manual', {p_evento: ev, p_aprobar: !!($('#e-aprobar') && $('#e-aprobar').checked)});
     toast('Evento creado' + (($('#e-aprobar') && $('#e-aprobar').checked) ? ' y aprobado' : ' como propuesto')); S.cob.sub = 'pendientes'; await cobReload();
   }});
-  bindPersonaSel();
+  bindPersonaSel(); cobPrefill(ctx.prefill);
 }
 async function cobDecidir(decision){
   const C = S.cob, ids = C.pend.filter(e => C.sel[e.id]).map(e => e.id); if (!ids.length) return;
@@ -728,6 +766,8 @@ function bindCobertura(){
   const bp = $('#cob-aplicar'); if (bp) bp.onclick = cobAplicar;
   const bf = $('#cob-firmar'); if (bf) bf.onclick = cobFirmar;
   const bpn = $('#cob-persona'); if (bpn) bpn.onclick = cobPersonaSola;
+  const gr = $('#gv-refresh'); if (gr) gr.onclick = () => { C.gv = null; loadGV(); };
+  on('[data-gv]', 'click', (e) => { const b = e.currentTarget; if (b.dataset.gv === 'alta-nueva') cobForm('alta', {prefill: {nombre: b.dataset.nombre, rut: b.dataset.rut}}); else cobForm('alta', {prefill: {persona_id: b.dataset.pid}}); });
 }
 
 // ---------- render ----------
