@@ -185,7 +185,7 @@ const S = {
   metas: null, compPeriodo: null, metasFiltro: {cuenta:'', q:''}, margen: 0,
   check: null, foto: null, offReason: '', loadError: null,
   tramoFiltro: 'miden', vistaPort: 'nacional', cuentaCat: '', busy: false, importPrev: null,
-  cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}, gv: null, gvLoading: false},
+  cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}, gv: null, gvLoading: false, ma: null, maLoading: false, maSub: 'tiendas', maF: {cuenta: '', q: '', vig: true, conAlias: false}, maRes: null, maResLoading: false, maTxt: ''},
 };
 
 // ---------- utilidades ----------
@@ -564,9 +564,9 @@ function viewCobertura(){
     </div>
     <div class="chips">${(E.cupos_por_cuenta || []).map(c => `<span class="pill">${esc(c.cuenta)} <b>${nf1.format(+c.cupos)}</b> · ${c.tiendas} t</span>`).join('')}</div>
     ${C.error ? `<div class="banner bad"><p>${esc(C.error)}</p></div>` : ''}
-    <div class="subtabs"><button data-sub="mapa" aria-current="${C.sub==='mapa'}">Mapa</button><button data-sub="pendientes" aria-current="${C.sub==='pendientes'}">Pendientes${nP ? ` (${nP})` : ''}</button><button data-sub="firmar" aria-current="${C.sub==='firmar'}">Firmar período${+E.diff_vs_firme ? ` (${E.diff_vs_firme})` : ''}</button><button data-sub="gv" aria-current="${C.sub==='gv'}">GeoVictoria${C.gv ? ` (${(C.gv.sin_persona||[]).length + (C.gv.inactivas_marcando||[]).length + (C.gv.activas_sin_tienda||[]).filter(x => x.marca_hoy).length + (C.gv.planificadas_sin_marca||[]).length})` : ''}</button><span class="grow"></span><button id="cob-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div>
+    <div class="subtabs"><button data-sub="mapa" aria-current="${C.sub==='mapa'}">Mapa</button><button data-sub="pendientes" aria-current="${C.sub==='pendientes'}">Pendientes${nP ? ` (${nP})` : ''}</button><button data-sub="firmar" aria-current="${C.sub==='firmar'}">Firmar período${+E.diff_vs_firme ? ` (${E.diff_vs_firme})` : ''}</button><button data-sub="maestros" aria-current="${C.sub==='maestros'}">Maestros${C.ma ? ` (${(C.ma.alias||[]).filter(a => a.activo).length} alias)` : ''}</button><button data-sub="gv" aria-current="${C.sub==='gv'}">GeoVictoria${C.gv ? ` (${(C.gv.sin_persona||[]).length + (C.gv.inactivas_marcando||[]).length + (C.gv.activas_sin_tienda||[]).filter(x => x.marca_hoy).length + (C.gv.planificadas_sin_marca||[]).length})` : ''}</button><span class="grow"></span><button id="cob-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div>
   </section>`;
-  return kpi + ({mapa: viewCobMapa, pendientes: viewCobPend, firmar: viewCobFirmar, gv: viewCobGV}[C.sub] || viewCobMapa)();
+  return kpi + ({mapa: viewCobMapa, pendientes: viewCobPend, firmar: viewCobFirmar, gv: viewCobGV, maestros: viewCobMaestros}[C.sub] || viewCobMapa)();
 }
 function viewCobMapa(){
   const C = S.cob, f = C.filtro, q = (f.q || '').toLowerCase(), cuentas = [...new Set(C.vigente.map(r => r.cuenta))].sort();
@@ -749,11 +749,128 @@ function cobFirmar(){
   openModal({title: `Firmar cobertura de ${perLbl(S.periodo)}${F ? ' · v' + (F.version + 1) : ' · v1'}`, intro: `Se congelan ${C.diff.length} diferencia(s) junto con el resto del ciclo. Desde esta versión se pueden reemitir metas y cartas.`, needMotivo: true, confirmLbl: 'Firmar',
     onConfirm: async (motivo) => { const r = await rpc('cob_firmar', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre, p_notas: motivo, p_fuente_archivo: null}); toast(`Firmada v${r.version}: ${r.n_filas} filas · ${nf1.format(+r.cupos_valor)} cupos`); await cobReload(); }});
 }
+// ----- Cobertura › Maestros › Tiendas (alias) -----
+const VIA_LBL = {codigo:'código', alias:'alias', legacy:'código legacy', mototalk:'nombre MotoTalk', nombre:'nombre exacto'};
+const FUENTE_LBL = {archivo_agencia:'archivo agencia', base_touch:'Base Touch', geovictoria:'GeoVictoria', otro:'otro'};
+async function loadMaestros(){ const C = S.cob; if (C.maLoading) return; C.maLoading = true; renderMain(); try { C.ma = await rpc('cob_alias_maestro'); } catch(e) { C.ma = {error: errMsg(e)}; } finally { C.maLoading = false; renderMain(); } }
+function viewCobMaestros(){
+  const C = S.cob, M = C.ma;
+  if (!M && !C.maLoading) { setTimeout(loadMaestros, 0); return '<div class="empty">Cargando maestros…</div>'; }
+  if (C.maLoading && !M) return '<div class="empty">Cargando maestros…</div>';
+  if (M.error) return `<div class="banner bad"><p>${esc(M.error)}</p><button id="ma-retry">Reintentar</button></div>`;
+  const sub = `<div class="subtabs" style="margin-bottom:10px"><button data-masub="tiendas" aria-current="${C.maSub==='tiendas'}">Tiendas (alias)</button><button data-masub="cuentas" aria-current="${C.maSub==='cuentas'}">Cuentas (alias)</button><button data-masub="probar" aria-current="${C.maSub==='probar'}">Probar resolución</button><span class="grow"></span><button id="ma-refresh" ${C.maLoading?'disabled':''}>${C.maLoading ? 'Actualizando…' : 'Actualizar'}</button></div>`;
+  return sub + ({tiendas: viewMaTiendas, cuentas: viewMaCuentas, probar: viewMaProbar}[C.maSub] || viewMaTiendas)();
+}
+function viewMaTiendas(){
+  const C = S.cob, M = C.ma, f = C.maF, ro = RO(), q = (f.q || '').toLowerCase();
+  const aliasPor = new Map(); for (const a of M.alias) { if (!a.activo) continue; const l = aliasPor.get(a.tienda_id) || []; l.push(a); aliasPor.set(a.tienda_id, l); }
+  const cuentas = [...new Set(M.tiendas.map(t => t.cuenta))].sort();
+  let rows = M.tiendas;
+  if (f.cuenta) rows = rows.filter(t => t.cuenta === f.cuenta);
+  if (f.vig) rows = rows.filter(t => t.vigente);
+  if (f.conAlias) rows = rows.filter(t => aliasPor.has(t.id));
+  if (q) rows = rows.filter(t => [t.nombre, t.clave, t.cuenta, ...(t.variantes||[]), ...(t.legacy||[]), ...(t.mototalk||[]), ...(aliasPor.get(t.id)||[]).map(a => a.alias)].some(x => String(x||'').toLowerCase().includes(q)));
+  const nAlias = M.alias.filter(a => a.activo).length, nInact = M.alias.length - nAlias;
+  const chips = (arr, cls) => (arr || []).length ? arr.map(x => `<span class="pill ${cls||''}" title="${esc(x)}">${esc(x)}</span>`).join(' ') : '<span class="muted">—</span>';
+  const tr = rows.slice(0, 400).map(t => {
+    const al = aliasPor.get(t.id) || [];
+    return `<tr><td>${esc(t.cuenta)}</td><td><b>${esc(t.nombre)}</b>${t.vigente ? '' : ' <span class="pill">sin promotor</span>'}<div class="muted" style="font-size:12px">${esc(t.region || '')}</div></td>
+      <td><span class="kbd">${esc(t.clave)}</span>${(t.variantes||[]).length > 1 ? `<div class="muted" style="font-size:12px" title="Variantes del mismo local, resueltas por v_tienda_canonica">${t.variantes.map(esc).join(' · ')}</div>` : ''}</td>
+      <td>${chips(t.legacy)}</td><td>${chips(t.mototalk)}</td>
+      <td><div class="chips">${al.map(a => `<span class="pill acc" title="${esc(FUENTE_LBL[a.fuente] || a.fuente)} · ${esc(a.creado_por)} · ${esc(a.motivo)}">${esc(a.alias)}${a.cuenta_id ? '' : ' <span class="muted">(global)</span>'}${ro ? '' : ` <button class="link" data-ma-off="${a.id}" title="Desactivar alias" aria-label="Desactivar alias ${esc(a.alias)}">×</button>`}</span>`).join('')}${al.length ? '' : '<span class="muted">—</span>'}</div></td>
+      ${ro ? '' : `<td><div class="rowact"><button data-ma-add="${t.id}">+ alias</button></div></td>`}</tr>`;
+  }).join('');
+  return `<section class="panel"><div class="panel-head"><h2>Tiendas canónicas y sus alias</h2><span class="muted">${fN(M.tiendas.length)} tiendas físicas canónicas · ${fN(M.tiendas.filter(t => t.vigente).length)} con promotor vigente · <b>${nAlias}</b> alias activos${nInact ? ` · ${nInact} desactivados` : ''}</span></div>
+    <p class="hint">Un <b>alias</b> es el texto con que un archivo externo (cobertura de Touch, Base de metas, GeoVictoria) nombra a una tienda, apuntando a su tienda canónica en TRADE. Las variantes de código (Movistar <span class="kbd">CL25_</span>, Hites <span class="kbd">.0</span>) y los alias de cadena (CENCOSUD = Paris, ABCDIN = ABC) ya se resuelven solos; acá van los demás. Orden de resolución: código → alias → código legacy → nombre MotoTalk → nombre exacto único. Los alias no se borran: se desactivan con motivo y quedan en la bitácora.</p>
+    <div class="ctrl"><label class="lbl" for="ma-cuenta">Cuenta</label><select id="ma-cuenta"><option value="">Todas</option>${cuentas.map(c => `<option ${f.cuenta===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+      <input id="ma-q" placeholder="Buscar tienda, código, alias…" value="${esc(f.q)}" style="min-width:240px">
+      <label class="lbl"><input type="checkbox" id="ma-vig" ${f.vig?'checked':''}> solo con promotor vigente</label>
+      <label class="lbl"><input type="checkbox" id="ma-conalias" ${f.conAlias?'checked':''}> solo con alias</label>
+      <span class="muted">${fN(rows.length)} tienda${rows.length===1?'':'s'}${rows.length > 400 ? ' · se muestran 400, acota el filtro' : ''}</span></div>
+    <div class="tbl tall"><table><thead><tr><th>Cuenta</th><th>Tienda canónica</th><th>Código</th><th>Código legacy</th><th>Nombre MotoTalk</th><th>Alias</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>${tr || `<tr><td colspan="7" class="empty">Sin tiendas con ese filtro.</td></tr>`}</tbody></table></div>
+  </section>`;
+}
+function viewMaCuentas(){
+  const C = S.cob, M = C.ma, ro = RO();
+  const act = M.cuenta_alias.filter(a => a.activo), inact = M.cuenta_alias.filter(a => !a.activo);
+  return `<section class="panel"><div class="panel-head"><h2>Alias de cuenta (cadena)</h2>${ro ? '' : '<button id="ma-addcta">+ alias de cuenta</button>'}</div>
+    <p class="hint">Nombres con que los archivos externos llaman a una cuenta de TRADE. Se usan para resolver el prefijo de un código (<span class="kbd">CENCOSUD::123</span> → Paris) y la columna "cadena" de los archivos.</p>
+    <div class="tbl"><table><thead><tr><th>Alias</th><th>Cuenta en TRADE</th><th>Motivo</th><th>Creado</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
+      ${act.map(a => `<tr><td><b>${esc(a.alias)}</b></td><td>${esc(a.cuenta)}</td><td class="muted">${esc(a.motivo)}</td><td class="muted">${esc(fDate(String(a.creado_en).slice(0,10)))} · ${esc(a.creado_por)}</td>${ro ? '' : `<td><div class="rowact"><button class="danger" data-ma-offcta="${a.id}">Desactivar</button></div></td>`}</tr>`).join('') || '<tr><td colspan="5" class="empty">Sin alias de cuenta.</td></tr>'}
+      ${inact.map(a => `<tr class="removed"><td>${esc(a.alias)}</td><td>${esc(a.cuenta)}</td><td class="muted">desactivado: ${esc(a.motivo_baja || '')}</td><td class="muted">${esc(fDate(String(a.desactivado_en||'').slice(0,10)))} · ${esc(a.desactivado_por || '')}</td>${ro ? '' : '<td></td>'}</tr>`).join('')}
+    </tbody></table></div></section>`;
+}
+function viewMaProbar(){
+  const C = S.cob, R = C.maRes, ro = RO();
+  const resTbl = !R ? '' : R.error ? `<div class="banner bad"><p>${esc(R.error)}</p></div>` : (() => {
+    const ok = R.filter(r => r.tienda_id), ko = R.filter(r => !r.tienda_id);
+    const porVia = {}; for (const r of ok) porVia[r.via] = (porVia[r.via] || 0) + 1;
+    return `<div class="chips" style="margin:8px 0"><span class="pill ok">${ok.length} resueltas</span>${Object.entries(porVia).map(([v, n]) => `<span class="pill">${esc(VIA_LBL[v] || v)} ${n}</span>`).join('')}<span class="pill ${ko.length ? 'warn' : ''}">${ko.length} sin resolver</span></div>
+      <div class="tbl tall"><table><thead><tr><th>#</th><th>Texto</th><th>Cadena</th><th>Resultado</th><th>Vía</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
+      ${[...ko, ...ok].map(r => `<tr><td class="num muted">${r.i}</td><td><b>${esc(r.texto)}</b></td><td>${esc(r.cuenta_txt || '')}${r.cuenta_txt && !r.cuenta_id ? ' <span class="pill bad" title="No se reconoce como cuenta ni alias de cuenta">cadena desconocida</span>' : ''}</td>
+        <td>${r.tienda_id ? `${esc(r.cuenta)} · ${esc(r.tienda)}` : `<span class="pill warn">sin resolver</span>${(r.sugerencias||[]).length ? `<div class="muted" style="font-size:12.5px">¿${r.sugerencias.map(s => `<span title="similitud ${s.sim}">${esc(s.cuenta)} ${esc(s.nombre)}</span>`).join(' · ')}?</div>` : ''}`}</td>
+        <td>${r.via ? `<span class="pill ${r.via === 'nombre' ? 'warn' : 'ok'}">${esc(VIA_LBL[r.via] || r.via)}</span>` : ''}</td>
+        ${ro ? '' : `<td><div class="rowact">${r.tienda_id ? (r.via === 'alias' || r.via === 'codigo' ? '' : `<button data-ma-fix="${r.i}" title="Dejarlo explícito como alias">Fijar como alias</button>`) : `<button class="primary" data-ma-fix="${r.i}">Crear alias…</button>`}</div></td>`}</tr>`).join('')}
+      </tbody></table></div>`;
+  })();
+  return `<section class="panel"><div class="panel-head"><h2>Probar cómo resuelve un archivo</h2></div>
+    <p class="hint">Pega una lista de tiendas tal como vienen en el archivo (una por línea; opcionalmente <span class="kbd">texto<b>⇥</b>cadena</span> o <span class="kbd">texto ; cadena</span>). No cambia nada: muestra a qué tienda canónica llega cada una y por qué vía. Lo que quede sin resolver se puede fijar como alias desde la misma fila.</p>
+    <textarea id="ma-txt" rows="6" style="width:100%;font-family:var(--f-mono);font-size:13px" placeholder="Plaza Vespucio\tEntel&#10;CENCOSUD::123&#10;SUCURSAL ENTEL PLAZA OESTE">${esc(C.maTxt)}</textarea>
+    <div class="ctrl" style="margin-top:8px"><button class="primary" id="ma-resolver" ${C.maResLoading?'disabled':''}>${C.maResLoading ? 'Resolviendo…' : 'Resolver'}</button><span class="muted">Hasta 2.000 líneas por consulta.</span></div>
+    ${resTbl}</section>`;
+}
+function maSplitLines(txt){ return String(txt || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { const m = l.split(/\t|\s*;\s*/); return {texto: m[0].trim(), cuenta: (m[1] || '').trim() || null}; }); }
+async function maResolver(){ const C = S.cob; C.maTxt = $('#ma-txt').value; const filas = maSplitLines(C.maTxt); if (!filas.length) { toast('Pega al menos una línea'); return; } C.maResLoading = true; renderMain(); try { C.maRes = await rpc('cob_alias_resolver', {p_filas: filas}); } catch(e) { C.maRes = {error: errMsg(e)}; } finally { C.maResLoading = false; renderMain(); } }
+function maTiendaSelect(id, M, sel, cuentaId){ const ts = M.tiendas.filter(t => !cuentaId || String(t.cuenta_id) === String(cuentaId)); return `<select id="${id}" style="width:100%"><option value="">— elegir tienda canónica —</option>${ts.map(t => `<option value="${t.id}" ${String(t.id)===String(sel)?'selected':''}>${esc(t.cuenta)} · ${esc(t.nombre)} (${esc(t.clave)})${t.vigente ? '' : ' · sin promotor'}</option>`).join('')}</select>`; }
+function maAliasForm({alias, cuentaId, tiendaId, sugerencias}){
+  const C = S.cob, M = C.ma;
+  const extra = `<div class="fields" style="display:grid;gap:8px">
+    <div class="field"><label class="lbl" for="al-alias">Alias (texto tal como viene en el archivo)</label><input id="al-alias" value="${esc(alias || '')}"></div>
+    <div class="field"><label class="lbl" for="al-cuenta">Cuenta del alias <span class="muted">(acota la tienda; "global" si el texto no trae cadena)</span></label><select id="al-cuenta"><option value="">Global</option>${M.cuentas.map(c => `<option value="${c.id}" ${String(c.id)===String(cuentaId||'')?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+    <div class="field"><label class="lbl" for="al-tienda">Tienda canónica</label>${maTiendaSelect('al-tienda', M, tiendaId, cuentaId)}${(sugerencias||[]).length ? `<div class="chips">${sugerencias.map(s => `<button type="button" class="link" data-sug="${s.id}">${esc(s.cuenta)} ${esc(s.nombre)} <span class="muted">${s.sim}</span></button>`).join('')}</div>` : ''}</div>
+    <div class="field"><label class="lbl" for="al-fuente">Fuente</label><select id="al-fuente">${Object.entries(FUENTE_LBL).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select></div></div>`;
+  openModal({title: 'Nuevo alias de tienda', intro: 'Desde ahora, ese texto resolverá a la tienda elegida en toda carga o conciliación. Queda en la bitácora con tu usuario.', extra, needMotivo: true, confirmLbl: 'Guardar alias',
+    onConfirm: async (motivo) => {
+      const p = {tipo: 'tienda', alias: $('#al-alias').value, cuenta_id: $('#al-cuenta').value || null, tienda_id: $('#al-tienda').value || null, fuente: $('#al-fuente').value, motivo};
+      if (!p.tienda_id) throw new Error('Elige la tienda canónica');
+      await rpc('cob_alias_guardar', {p}); toast('Alias guardado'); C.ma = null; await loadMaestros(); if (C.maRes && !C.maRes.error) await maResolver();
+    }});
+  const sc = $('#al-cuenta'); if (sc) sc.onchange = () => { const cur = $('#al-tienda').value; $('#al-tienda').outerHTML = maTiendaSelect('al-tienda', M, cur, sc.value); };
+  document.querySelectorAll('[data-sug]').forEach(b => b.onclick = () => { const t = M.tiendas.find(x => String(x.id) === b.dataset.sug); if (t) { $('#al-cuenta').value = String(t.cuenta_id); $('#al-tienda').outerHTML = maTiendaSelect('al-tienda', M, t.id, t.cuenta_id); } });
+}
+function maCuentaForm(){
+  const C = S.cob, M = C.ma;
+  openModal({title: 'Nuevo alias de cuenta', extra: `<div class="field"><label class="lbl" for="ac-alias">Alias (como viene en el archivo)</label><input id="ac-alias" placeholder="Ej.: CENCOSUD"></div><div class="field"><label class="lbl" for="ac-cuenta">Cuenta en TRADE</label><select id="ac-cuenta">${M.cuentas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></div>`, needMotivo: true, confirmLbl: 'Guardar alias',
+    onConfirm: async (motivo) => { await rpc('cob_alias_guardar', {p: {tipo: 'cuenta', alias: $('#ac-alias').value, cuenta_id: $('#ac-cuenta').value, motivo}}); toast('Alias de cuenta guardado'); C.ma = null; await loadMaestros(); }});
+}
+function maDesactivar(tipo, id){
+  const C = S.cob, M = C.ma, a = (tipo === 'cuenta' ? M.cuenta_alias : M.alias).find(x => String(x.id) === String(id)); if (!a) return;
+  openModal({title: `Desactivar alias "${a.alias}"`, intro: 'No se borra: queda inactivo y en la bitácora. Los archivos que traigan ese texto volverán a salir como "sin resolver".', needMotivo: true, confirmLbl: 'Desactivar',
+    onConfirm: async (motivo) => { await rpc('cob_alias_desactivar', {p_tipo: tipo, p_id: +id, p_motivo: motivo}); toast('Alias desactivado'); C.ma = null; await loadMaestros(); }});
+}
+function bindMaestros(){
+  const C = S.cob, M = C.ma, on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
+  const rt = $('#ma-retry'); if (rt) rt.onclick = () => { C.ma = null; loadMaestros(); };
+  const rf = $('#ma-refresh'); if (rf) rf.onclick = () => { C.ma = null; loadMaestros(); };
+  on('[data-masub]', 'click', (e) => { C.maSub = e.currentTarget.dataset.masub; renderMain(); });
+  const fc = $('#ma-cuenta'); if (fc) fc.onchange = (e) => { C.maF.cuenta = e.target.value; renderMain(); };
+  const fv = $('#ma-vig'); if (fv) fv.onchange = (e) => { C.maF.vig = e.target.checked; renderMain(); };
+  const fa = $('#ma-conalias'); if (fa) fa.onchange = (e) => { C.maF.conAlias = e.target.checked; renderMain(); };
+  const fq = $('#ma-q'); if (fq) { fq.oninput = (e) => { C.maF.q = e.target.value; }; fq.onchange = () => renderMain(); fq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
+  on('[data-ma-add]', 'click', (e) => { const t = M.tiendas.find(x => String(x.id) === e.currentTarget.dataset.maAdd); maAliasForm({cuentaId: t && t.cuenta_id, tiendaId: t && t.id}); });
+  on('[data-ma-off]', 'click', (e) => maDesactivar('tienda', e.currentTarget.dataset.maOff));
+  on('[data-ma-offcta]', 'click', (e) => maDesactivar('cuenta', e.currentTarget.dataset.maOffcta));
+  const bc = $('#ma-addcta'); if (bc) bc.onclick = maCuentaForm;
+  const br = $('#ma-resolver'); if (br) br.onclick = maResolver;
+  const tx = $('#ma-txt'); if (tx) tx.onchange = () => { C.maTxt = tx.value; };
+  on('[data-ma-fix]', 'click', (e) => { const r = (C.maRes || []).find(x => String(x.i) === e.currentTarget.dataset.maFix); if (!r) return; maAliasForm({alias: r.texto, cuentaId: r.cuenta_id, tiendaId: r.tienda_id, sugerencias: r.sugerencias}); });
+}
 function bindCobertura(){
   const C = S.cob, on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
   const rt = $('#cob-retry'); if (rt) rt.onclick = loadCob;
   const rf = $('#cob-refresh'); if (rf) rf.onclick = cobReload;
   on('[data-sub]', 'click', (e) => { C.sub = e.currentTarget.dataset.sub; renderMain(); });
+  if (C.sub === 'maestros' && C.ma) bindMaestros();
   const fc = $('#cob-cuenta'); if (fc) fc.onchange = (e) => { C.filtro.cuenta = e.target.value; renderMain(); };
   const fe = $('#cob-estado'); if (fe) fe.onchange = (e) => { C.filtro.estado = e.target.value; renderMain(); };
   const fq = $('#cob-q'); if (fq) { fq.oninput = (e) => { C.filtro.q = e.target.value; }; fq.onchange = () => renderMain(); fq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
