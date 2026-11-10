@@ -896,13 +896,14 @@ function mpForm(p){
     <div class="field" style="grid-column:1/-1"><label class="lbl" for="mp-nombre">Nombre completo</label><input id="mp-nombre" value="${esc(p ? p.nombre : '')}" placeholder="Apellidos y nombres como en Buk"></div>
     <div class="field"><label class="lbl" for="mp-rut">RUT ${p && p.rut_norm ? '<span class="muted">(registrado, no se cambia)</span>' : ''}</label><input id="mp-rut" value="${esc(p ? (p.rut_norm || '') : '')}" ${p && p.rut_norm ? 'disabled' : 'placeholder="12345678-9"'}></div>
     ${sel('mp-rol', 'Rol', P.roles.map(r => [r.nombre, r.nombre + ' · ' + (r.nivel || '')]), p ? p.rol : 'Promotor')}
-    ${sel('mp-cat', 'Categoría (promotores)', P.categorias.map(c => [c.id, c.nombre]), p ? p.categoria_id : '', true)}
+    ${p && p.jornada && p.jornada !== 'FULL TIME' ? `<div class="field"><label class="lbl">Categoría</label><div class="muted" style="padding:6px 0">Part time (${esc(p.jornada)}): sin categoría. Su cargo de bono es <b>${esc(p.cargo_bono || 'Captador Part')}</b>.</div></div>` : sel('mp-cat', 'Categoría <span class="muted">(solo full time: A / B / C / VIP)</span>', P.categorias.filter(c => /Captador (A|B|C|VIP)$/.test(c.nombre)).map(c => [c.id, c.nombre]), p ? p.categoria_id : '', true)}
     ${sel('mp-rep', 'Reporta a', P.mandos.map(m => [m.id, m.nombre + ' · ' + m.rol]), p ? p.reporta_a_id : '', true)}
     <div class="field"><label class="lbl" for="mp-ing">Fecha de ingreso</label><input type="date" id="mp-ing" value="${esc(p ? (p.fecha_ingreso || '') : hoyISO())}"></div></div>
-    <p class="hint" style="margin:8px 0 0">El cargo de bono se deriva de categoría + jornada de la planificación; no se edita.</p>`;
+    <p class="hint" style="margin:8px 0 0">El cargo de bono se deriva de jornada + categoría: full time A/B/C/VIP → Captador Full A/B/C o Captador VIP; PT 20 / PT 30 → Captador Part 20 / Part 30 (sin letra). No se edita.</p>`;
   openModal({title: nuevo ? 'Nueva persona en el maestro' : `Editar · ${p.nombre}`, intro: nuevo ? 'Queda en el maestro de Personas. Para darle una tienda usa luego <b>+ Alta</b> en Cobertura. Si el RUT ya existe inactivo, se reactiva esa persona en vez de duplicarla.' : 'Cambia atributos; la asignación a tiendas vive en Cobertura.', extra, needMotivo: true, confirmLbl: nuevo ? 'Crear persona' : 'Guardar',
     onConfirm: async (motivo) => {
-      const body = {nombre: $('#mp-nombre').value, rut: $('#mp-rut').disabled ? null : ($('#mp-rut').value || null), rol: $('#mp-rol').value, categoria_id: $('#mp-cat').value || null, reporta_a_id: $('#mp-rep').value || null, fecha_ingreso: $('#mp-ing').value || null, motivo};
+      const catEl = $('#mp-cat'), body = {nombre: $('#mp-nombre').value, rut: $('#mp-rut').disabled ? null : ($('#mp-rut').value || null), rol: $('#mp-rol').value, reporta_a_id: $('#mp-rep').value || null, fecha_ingreso: $('#mp-ing').value || null, motivo};
+      if (catEl) body.categoria_id = catEl.value || null; else body.categoria_id = null;
       if (nuevo) { const r = await rpc('cob_persona_crear', {p: body}); toast(r.accion === 'reactivada' ? `Reactivada: ${r.nombre}` : `Creada: ${r.nombre}`); }
       else { await rpc('mst_persona_editar', {p: Object.assign({id: p.id}, body)}); toast('Persona actualizada'); }
       C.per = null; S.cob.cat = null; S.cob.loaded = false; await loadPersonas();
