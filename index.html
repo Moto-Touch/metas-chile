@@ -188,7 +188,7 @@ const S = {
   tramoFiltro: 'miden', vistaPort: 'nacional', cuentaCat: '', busy: false, importPrev: null, importSinMatch: null,
   cob: {loaded: false, loading: false, error: null, estado: null, vigente: [], pend: [], diff: [], cat: null, sub: 'mapa', filtro: {cuenta: '', q: '', estado: ''}, sel: {}, gv: null, gvLoading: false},
   ma: {data: null, loading: false, sub: 'tiendas', f: {cuenta: '', q: '', vig: true, conAlias: false}, res: null, resLoading: false, txt: '',
-       per: null, perLoading: false, perF: {q: '', nivel: '', estado: 'activos'}, prod: null, prodLoading: false, prodF: {q: '', family: '', sub: 'modelos'}},
+       per: null, perLoading: false, perF: {q: '', nivel: '', estado: 'activos'}, prod: null, prodLoading: false, prodF: {q: '', family: '', cat: '', sub: 'modelos'}},
 };
 
 // ---------- utilidades ----------
@@ -908,6 +908,9 @@ function mpEstado(p, activo){
 
 // ----- Maestros › Productos -----
 const TIPO_PROD = {telefono: 'teléfono', no_telefono: 'no teléfono', pendiente: 'pendiente'};
+const catLbl = (c) => c ? (c.categoria + (c.subcategoria ? ' · ' + c.subcategoria : '')) : '';
+const catSelect = (id, D, val) => `<select id="${id}">${(D.categorias || []).map(c => `<option value="${esc(c.codigo)}" ${c.codigo===val?'selected':''}>${esc(catLbl(c))}</option>`).join('')}</select>`;
+const catPill = (m) => !m.categoria ? '<span class="pill warn" title="Sin categoría">sin categoría</span>' : `<span class="pill ${m.tipo==='telefono' ? 'ok' : (m.categoria === 'Motothings' ? 'acc' : '')}">${esc(m.categoria)}</span>${m.subcategoria ? ` <span class="muted" style="font-size:12px">${esc(m.subcategoria)}</span>` : ''}${m.cat_mixta ? ' <span class="pill warn" title="Los SKU de este modelo tienen categorías distintas">mixto</span>' : ''}`;
 async function loadProductos(){ const C = S.ma; if (C.prodLoading) return; C.prodLoading = true; renderMain(); try { C.prod = await rpc('mst_productos'); } catch(e) { C.prod = {error: errMsg(e)}; } finally { C.prodLoading = false; renderMain(); } }
 function viewMaProductos(){
   const C = S.ma, D = C.prod, f = C.prodF, ro = RO(), q = (f.q || '').toLowerCase();
@@ -917,7 +920,8 @@ function viewMaProductos(){
   const tels = D.modelos.filter(m => m.tipo === 'telefono'), sinTramo = tels.filter(m => !m.tramo_master && m.volumen > 0).length;
   const head = `<section class="panel"><div class="panel-head"><h2>Productos</h2><button id="mq-refresh">Actualizar</button></div>
     <div class="statgrid"><div class="stat"><b>${fN(tels.length)}</b><span>modelos teléfono (${fN(D.familias.length)} familias)</span></div><div class="stat"><b>${fN(tels.reduce((s, m) => s + m.n_sku, 0))}</b><span>SKU de teléfono</span></div><div class="stat"><b style="${D.pendientes.length ? 'color:var(--warn)' : ''}">${fN(D.pendientes.length)}</b><span>SKU pendientes de clasificar</span></div><div class="stat"><b style="${D.sin_sku_en_producto.length ? 'color:var(--bad)' : ''}">${fN(D.sin_sku_en_producto.length)}</b><span>detectados sin fila en producto</span></div><div class="stat"><b>${fN(sinTramo)}</b><span>modelos con venta y sin tramo maestro</span></div></div>
-    <p class="hint">El maestro tiene dos niveles: <b>modelo</b> (familia + market name, lo que Portafolio clasifica en tramos y lo que mide la meta) y <b>SKU</b> (el código de cada cadena, lo que viene en el maestro de venta). Un SKU <b>pendiente</b> no cuenta como teléfono hasta que alguien lo clasifique; mientras tanto no suma a mix, cobertura de portafolio ni cierre. Portafolio decide el tramo <i>del período</i>; acá se decide qué es cada cosa.</p>
+    <p class="hint">El maestro tiene dos niveles: <b>modelo</b> (familia + market name, lo que Portafolio clasifica en tramos y lo que mide la meta) y <b>SKU</b> (el código de cada cadena, lo que viene en el maestro de venta). Cada modelo tiene una <b>categoría</b> (Teléfono · PC · Tablet · Motothings con subcategoría · Otro); solo Teléfono mide en mix, meta y cierre. Un SKU <b>pendiente</b> no cuenta hasta que alguien lo clasifique. Portafolio decide el tramo <i>del período</i>; acá se decide qué es cada cosa.</p>
+    <div class="chips">${(D.categorias || []).filter(c => !c.subcategoria || c.categoria !== 'Motothings').map(c => c.categoria).filter((v, i, a) => a.indexOf(v) === i).map(k => `<span class="pill ${k==='Teléfono'?'ok':k==='Motothings'?'acc':''}">${esc(k)} <b>${fN(porCat[k] || 0)}</b> SKU</span>`).join('')}</div>
     <div class="subtabs"><button data-mqsub="modelos" aria-current="${f.sub==='modelos'}">Modelos</button><button data-mqsub="pendientes" aria-current="${f.sub==='pendientes'}">Pendientes${D.pendientes.length ? ` (${D.pendientes.length})` : ''}</button></div></section>`;
   if (f.sub === 'pendientes') {
     const rows = D.pendientes.filter(p => !q || [p.sku, p.cadenas, p.descripcion].some(x => String(x||'').toLowerCase().includes(q)));
@@ -930,31 +934,34 @@ function viewMaProductos(){
   }
   let rows = D.modelos;
   if (f.family) rows = rows.filter(m => m.family === f.family);
-  if (q) rows = rows.filter(m => [m.family, m.market_name, m.modelo_tramo, ...(m.skus||[])].some(x => String(x||'').toLowerCase().includes(q)));
+  if (f.cat) rows = rows.filter(m => f.cat === '__sin__' ? !m.categoria_codigo : (m.categoria_codigo === f.cat || (f.cat.startsWith('cat:') && m.categoria === f.cat.slice(4))));
+  if (q) rows = rows.filter(m => [m.family, m.market_name, m.modelo_tramo, m.categoria, m.subcategoria, ...(m.skus||[])].some(x => String(x||'').toLowerCase().includes(q)));
+  const catOpts = [...new Set((D.categorias||[]).map(c => c.categoria))].map(k => `<option value="cat:${esc(k)}" ${f.cat==='cat:'+k?'selected':''}>${esc(k)}</option>` + (D.categorias||[]).filter(c => c.categoria === k && c.subcategoria).map(c => `<option value="${esc(c.codigo)}" ${f.cat===c.codigo?'selected':''}>&nbsp;&nbsp;· ${esc(c.subcategoria)}</option>`).join('')).join('');
   const fams = [...new Set(D.modelos.map(m => m.family))].sort();
   const tramoPill = (t) => t == null ? '<span class="muted">—</span>' : `<span class="pill ${t===3?'acc':''}">${TRAMO_LBL[t] || t}</span>`;
-  const sospechosos = tels.filter(m => /^(Accessory|Tablet)$/i.test(m.family || ''));
-  const aviso = sospechosos.length ? `<div class="banner warn"><p><b>${sospechosos.length} modelo${sospechosos.length===1?'':'s'} de familia Accessory / Tablet ${sospechosos.length===1?'está':'están'} como teléfono</b> (${fN(sospechosos.reduce((a, m) => a + m.n_sku, 0))} SKU, ${fN(sospechosos.reduce((a, m) => a + (+m.volumen||0), 0))} u en 2 años). Entran al mix y a la cobertura de portafolio como si fueran equipos. Se corrige modelo a modelo con <b>Editar</b>, o toda la familia de una vez.</p>${ro ? '' : `<button class="primary" data-mq-fam-tipo="Accessory">Accessory → no teléfono</button>${sospechosos.some(m => m.family === 'Tablet') ? '<button data-mq-fam-tipo="Tablet">Tablet → no teléfono</button>' : ''}`}</div>` : '';
-  return head + aviso + `<section class="panel"><div class="panel-head"><h2>Modelos</h2><div class="ctrl"><label class="lbl" for="mq-fam">Familia</label><select id="mq-fam"><option value="">Todas</option>${fams.map(x => `<option ${f.family===x?'selected':''}>${esc(x)}</option>`).join('')}</select><input id="mq-q" placeholder="Buscar modelo o SKU…" value="${esc(f.q)}" style="min-width:220px"><span class="muted">${fN(rows.length)}</span></div></div>
-    <div class="tbl tall"><table><thead><tr><th>Familia</th><th>Modelo (market name)</th><th>Tipo</th><th class="num">SKU</th><th class="num">Volumen 2 años</th><th>Última sem.</th><th>Tramo maestro</th><th>Tramo ${esc(D.periodo.nombre || '')}</th><th>MotoTalk</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
-    ${rows.slice(0, 500).map(m => `<tr><td>${esc(m.family || '—')}</td><td><b>${esc(m.market_name || '(sin market name)')}</b>${m.modelo_tramo && m.modelo_tramo !== m.market_name ? `<div class="muted" style="font-size:12px">${esc(m.modelo_tramo)}</div>` : ''}</td><td>${m.tipo === 'telefono' ? '<span class="pill ok">teléfono</span>' : '<span class="pill">no teléfono</span>'}</td><td class="num" title="${esc((m.skus||[]).join(', '))}">${m.n_sku}</td><td class="num">${fN(m.volumen)}</td><td class="muted">${m.ultima ? String(m.ultima).slice(0,4) + ' W' + String(m.ultima).slice(4) : '—'}</td><td>${tramoPill(m.tramo_master)}</td><td>${m.tramo_periodo != null ? tramoPill(m.tramo_periodo) + (m.mide_periodo === false ? ' <span class="muted">no mide</span>' : '') : '<span class="muted">—</span>'}</td><td>${m.mototalk ? `<span class="pill">${m.mototalk} nombre${m.mototalk===1?'':'s'}</span>` : '<span class="muted">—</span>'}</td>${ro ? '' : `<td><div class="rowact"><button data-mq-mod="${esc(m.family || '')}|${esc(m.market_name || '')}">Editar</button><button class="link" data-mq-skus="${esc(m.family || '')}|${esc(m.market_name || '')}">SKU…</button></div></td>`}</tr>`).join('') || '<tr><td colspan="10" class="empty">Sin modelos con ese filtro.</td></tr>'}
+  const sinCat = D.modelos.filter(m => !m.categoria_codigo || m.cat_mixta);
+  const aviso = sinCat.length ? `<div class="banner warn"><p><b>${sinCat.length} modelo${sinCat.length===1?'':'s'} sin categoría o con SKU en categorías distintas.</b> Usa <b>Editar</b> para dejarlos en una sola.</p></div>` : '';
+  const porCat = {}; for (const m of D.modelos) { const k = m.categoria || '—'; porCat[k] = (porCat[k] || 0) + m.n_sku; }
+  return head + aviso + `<section class="panel"><div class="panel-head"><h2>Modelos</h2><div class="ctrl"><label class="lbl" for="mq-cat">Categoría</label><select id="mq-cat"><option value="">Todas</option>${catOpts}<option value="__sin__" ${f.cat==='__sin__'?'selected':''}>Sin categoría</option></select><label class="lbl" for="mq-fam">Familia</label><select id="mq-fam"><option value="">Todas</option>${fams.map(x => `<option ${f.family===x?'selected':''}>${esc(x)}</option>`).join('')}</select><input id="mq-q" placeholder="Buscar modelo o SKU…" value="${esc(f.q)}" style="min-width:220px"><span class="muted">${fN(rows.length)}</span></div></div>
+    <div class="tbl tall"><table><thead><tr><th>Categoría</th><th>Familia</th><th>Modelo (market name)</th><th class="num">SKU</th><th class="num">Volumen 2 años</th><th>Última sem.</th><th>Tramo maestro</th><th>Tramo ${esc(D.periodo.nombre || '')}</th><th>MotoTalk</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
+    ${rows.slice(0, 500).map(m => `<tr><td>${catPill(m)}</td><td>${esc(m.family || '—')}</td><td><b>${esc(m.market_name || '(sin market name)')}</b>${m.modelo_tramo && m.modelo_tramo !== m.market_name ? `<div class="muted" style="font-size:12px">${esc(m.modelo_tramo)}</div>` : ''}</td><td class="num" title="${esc((m.skus||[]).join(', '))}">${m.n_sku}</td><td class="num">${fN(m.volumen)}</td><td class="muted">${m.ultima ? String(m.ultima).slice(0,4) + ' W' + String(m.ultima).slice(4) : '—'}</td><td>${tramoPill(m.tramo_master)}</td><td>${m.tramo_periodo != null ? tramoPill(m.tramo_periodo) + (m.mide_periodo === false ? ' <span class="muted">no mide</span>' : '') : '<span class="muted">—</span>'}</td><td>${m.mototalk ? `<span class="pill">${m.mototalk} nombre${m.mototalk===1?'':'s'}</span>` : '<span class="muted">—</span>'}</td>${ro ? '' : `<td><div class="rowact"><button data-mq-mod="${esc(m.family || '')}|${esc(m.market_name || '')}">Editar</button><button class="link" data-mq-skus="${esc(m.family || '')}|${esc(m.market_name || '')}">SKU…</button></div></td>`}</tr>`).join('') || '<tr><td colspan="10" class="empty">Sin modelos con ese filtro.</td></tr>'}
     </tbody></table></div>
-    <p class="hint"><b>Editar</b> cambia tipo, familia o market name de <i>todos</i> los SKU del modelo (renombrar al market name de otro modelo los fusiona); <b>SKU…</b> permite reclasificar un SKU suelto. Cambiar el tramo de un modelo para un período se hace en <b>Portafolio</b>; el tramo maestro (tramo_producto_master) es la referencia que Portafolio copia al abrir un período nuevo.</p></section>`;
+    <p class="hint"><b>Editar</b> cambia categoría, familia o market name de <i>todos</i> los SKU del modelo. La categoría decide si mide como teléfono: solo <b>Teléfono</b> entra a mix, meta y cierre; PC, Tablet, Motothings y Otro quedan fuera (Motothings tiene su propio pago en Variable). (renombrar al market name de otro modelo los fusiona); <b>SKU…</b> permite reclasificar un SKU suelto. Cambiar el tramo de un modelo para un período se hace en <b>Portafolio</b>; el tramo maestro (tramo_producto_master) es la referencia que Portafolio copia al abrir un período nuevo.</p></section>`;
 }
 function mqModelo(key){
   const C = S.ma, D = C.prod, [fam, mn] = key.split('|'), m = D.modelos.find(x => (x.family || '') === fam && (x.market_name || '') === mn); if (!m) return;
   const modelos = D.modelos.filter(x => x.tipo === 'telefono' && x.market_name && x !== m).map(x => x.market_name).sort();
   const extra = `<p class="muted" style="margin:0">${m.n_sku} SKU · ${fN(m.volumen)} u en 2 años${m.tramo_master != null ? ' · tramo maestro ' + (TRAMO_LBL[m.tramo_master] || m.tramo_master) : ''}</p>
     <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
-    <div class="field" style="grid-column:1/-1"><label class="lbl" for="mm-tipo">Tipo</label><select id="mm-tipo"><option value="telefono" ${m.tipo==='telefono'?'selected':''}>Teléfono (mide en metas, mix y portafolio)</option><option value="no_telefono" ${m.tipo==='no_telefono'?'selected':''}>No teléfono (accesorio, tablet, otro: fuera del universo)</option></select></div>
+    <div class="field" style="grid-column:1/-1"><label class="lbl" for="mm-cat">Categoría</label>${catSelect('mm-cat', D, m.categoria_codigo || 'telefono')}</div>
     <div class="field"><label class="lbl" for="mm-fam">Familia</label><input id="mm-fam" list="mm-fams" value="${esc(m.family || '')}"><datalist id="mm-fams">${D.familias.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
     <div class="field"><label class="lbl" for="mm-mn">Market name</label><input id="mm-mn" list="mm-mns" value="${esc(m.market_name || '')}"><datalist id="mm-mns">${modelos.map(x => `<option value="${esc(x)}">`).join('')}</datalist><span class="muted" id="mm-hint" style="font-size:12.5px"></span></div></div>`;
   openModal({title: `Editar modelo · ${m.market_name || '(sin market name)'}`, intro: 'Aplica a todos los SKU del modelo. Si el market name nuevo ya existe, los SKU se <b>fusionan</b> en ese modelo.', extra, needMotivo: true, confirmLbl: 'Guardar',
     onConfirm: async (motivo) => {
-      const tipo = $('#mm-tipo').value, fam2 = $('#mm-fam').value.trim(), mn2 = $('#mm-mn').value.trim();
+      const cod = $('#mm-cat').value, fam2 = $('#mm-fam').value.trim(), mn2 = $('#mm-mn').value.trim();
       const body = {family: m.family, market_name: m.market_name, motivo};
-      if (tipo !== m.tipo) body.tipo = tipo; if (fam2 && fam2 !== (m.family || '')) body.family_nuevo = fam2; if (mn2 && mn2 !== (m.market_name || '')) body.market_name_nuevo = mn2;
-      if (!body.tipo && !body.family_nuevo && !body.market_name_nuevo) throw new Error('No cambiaste nada');
+      if (cod !== m.categoria_codigo || m.cat_mixta) body.categoria_codigo = cod; if (fam2 && fam2 !== (m.family || '')) body.family_nuevo = fam2; if (mn2 && mn2 !== (m.market_name || '')) body.market_name_nuevo = mn2;
+      if (!body.categoria_codigo && !body.family_nuevo && !body.market_name_nuevo) throw new Error('No cambiaste nada');
       const r = await rpc('mst_modelo_clasificar', {p: body}); toast(`${r.n_sku} SKU actualizados${r.fusionado ? ' · fusionados en ' + r.market_name : ''}`); C.prod = null; await loadProductos();
     }});
   const mnI = $('#mm-mn'); mnI.oninput = () => { const v = mnI.value.trim(); $('#mm-hint').textContent = v && v !== m.market_name && modelos.includes(v) ? `Ya existe: los ${m.n_sku} SKU se fusionarán en "${v}"` : ''; };
@@ -969,31 +976,26 @@ function mqClasificarSku(sku, m){
   const C = S.ma, D = C.prod, modelos = D.modelos.filter(x => x.tipo === 'telefono' && x.market_name).map(x => x.market_name).sort();
   const extra = `<p class="muted" style="margin:0">SKU <span class="kbd">${esc(sku)}</span> · hoy ${esc(TIPO_PROD[m.tipo])} · ${esc(m.family || '')} / ${esc(m.market_name || '')}</p>
     <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
-    <div class="field" style="grid-column:1/-1"><label class="lbl" for="ms-tipo">Qué es</label><select id="ms-tipo"><option value="telefono" ${m.tipo==='telefono'?'selected':''}>Teléfono</option><option value="no_telefono" ${m.tipo!=='telefono'?'selected':''}>No teléfono</option></select></div>
+    <div class="field" style="grid-column:1/-1"><label class="lbl" for="ms-cat">Categoría</label>${catSelect('ms-cat', D, m.categoria_codigo || 'telefono')}</div>
     <div class="field"><label class="lbl" for="ms-fam">Familia</label><input id="ms-fam" list="ms-fams" value="${esc(m.family || '')}"><datalist id="ms-fams">${D.familias.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
     <div class="field"><label class="lbl" for="ms-mn">Market name</label><input id="ms-mn" list="ms-mns" value="${esc(m.market_name || '')}"><datalist id="ms-mns">${modelos.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div></div>`;
   openModal({title: 'Reclasificar SKU', extra, needMotivo: true, confirmLbl: 'Guardar',
-    onConfirm: async (motivo) => { const r = await rpc('mst_producto_clasificar', {p: {sku, tipo: $('#ms-tipo').value, family: $('#ms-fam').value || null, market_name: $('#ms-mn').value || null, motivo}}); toast(`${sku} → ${TIPO_PROD[r.tipo]} · ${r.market_name || r.family}`); C.prod = null; await loadProductos(); }});
-}
-function mqFamiliaTipo(fam){
-  const C = S.ma, D = C.prod, ms = D.modelos.filter(m => m.family === fam && m.tipo === 'telefono');
-  openModal({title: `${fam} → no teléfono`, intro: `Reclasifica <b>${ms.length} modelo${ms.length===1?'':'s'} y ${ms.reduce((a, m) => a + m.n_sku, 0)} SKU</b> como no teléfono. Salen del universo de mix, cobertura de portafolio y cierre; la venta e inventario siguen cargándose, solo dejan de contar como equipos. Queda una fila de bitácora por modelo.`, items: ms.map(m => `${m.market_name} · ${m.n_sku} SKU · ${fN(m.volumen)} u`), needMotivo: true, confirmLbl: 'Reclasificar familia',
-    onConfirm: async (motivo) => { const r = await rpc('mst_familia_tipo', {p_family: fam, p_tipo: 'no_telefono', p_motivo: motivo}); toast(`${r.modelos} modelos · ${r.skus} SKU → no teléfono`); C.prod = null; await loadProductos(); }});
+    onConfirm: async (motivo) => { const r = await rpc('mst_producto_clasificar', {p: {sku, categoria_codigo: $('#ms-cat').value, family: $('#ms-fam').value || null, market_name: $('#ms-mn').value || null, motivo}}); toast(`${sku} → ${catLbl((D.categorias||[]).find(c => c.codigo === r.categoria_codigo))} · ${r.market_name || r.family}`); C.prod = null; await loadProductos(); }});
 }
 function mqClasificar(sku){
   const C = S.ma, D = C.prod, p = D.pendientes.find(x => x.sku === sku); if (!p) return;
-  const modelos = D.modelos.filter(m => m.tipo === 'telefono' && m.market_name).map(m => m.market_name).sort();
+  const modelos = D.modelos.filter(m => m.market_name).map(m => m.market_name).sort();
   const extra = `<p class="muted" style="margin:0">SKU <span class="kbd">${esc(p.sku)}</span> · ${esc(p.cadenas || '')} · ${esc(p.descripcion || 'sin descripción')} · ${fN(p.volumen)} u</p>
     <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
-    <div class="field" style="grid-column:1/-1"><label class="lbl" for="mq-tipo">Qué es</label><select id="mq-tipo"><option value="telefono">Teléfono (modelo existente o nuevo)</option><option value="no_telefono">No teléfono (accesorio, tablet, otro)</option></select></div>
+    <div class="field" style="grid-column:1/-1"><label class="lbl" for="mq-tipo">Categoría</label>${catSelect('mq-tipo', D, 'telefono')}</div>
     <div class="field" id="mq-f-fam"><label class="lbl" for="mq-fam2">Familia</label><input id="mq-fam2" list="mq-fams" placeholder="Moto G, Motorola Edge…"><datalist id="mq-fams">${D.familias.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
     <div class="field" id="mq-f-mn"><label class="lbl" for="mq-mn">Modelo (market name)</label><input id="mq-mn" list="mq-mns" placeholder="moto g86 power 5G"><datalist id="mq-mns">${modelos.map(x => `<option value="${esc(x)}">`).join('')}</datalist><span class="muted" id="mq-mn-hint" style="font-size:12.5px"></span></div></div>`;
   openModal({title: 'Clasificar SKU', intro: 'Si el market name no existe todavía, <b>nace un modelo nuevo</b> en el maestro y aparecerá en Portafolio sin tramo hasta que se le asigne uno.', extra, needMotivo: true, confirmLbl: 'Clasificar',
     onConfirm: async (motivo) => {
-      const tipo = $('#mq-tipo').value, body = {sku, tipo, family: $('#mq-fam2').value || null, market_name: $('#mq-mn').value || null, motivo};
-      const r = await rpc('mst_producto_clasificar', {p: body}); toast(r.modelo_nuevo ? `Clasificado · modelo nuevo: ${r.market_name}` : `Clasificado como ${TIPO_PROD[r.tipo]}`); C.prod = null; await loadProductos();
+      const body = {sku, categoria_codigo: $('#mq-tipo').value, family: $('#mq-fam2').value || null, market_name: $('#mq-mn').value || null, motivo};
+      const r = await rpc('mst_producto_clasificar', {p: body}); toast(r.modelo_nuevo ? `Clasificado · modelo nuevo: ${r.market_name}` : `Clasificado: ${catLbl((D.categorias||[]).find(c => c.codigo === r.categoria_codigo))}`); C.prod = null; await loadProductos();
     }});
-  const tipoSel = $('#mq-tipo'), onTipo = () => { const tel = tipoSel.value === 'telefono'; $('#mq-f-mn').style.display = tel ? '' : 'none'; $('#mq-fam2').placeholder = tel ? 'Moto G, Motorola Edge…' : 'Accessory (por defecto)'; }; tipoSel.onchange = onTipo; onTipo();
+  const tipoSel = $('#mq-tipo'), onTipo = () => { const c = (D.categorias||[]).find(x => x.codigo === tipoSel.value) || {}; const tel = c.tipo === 'telefono'; $('#mq-fam2').placeholder = tel ? 'Moto G, Motorola Edge…' : (c.categoria === 'Motothings' ? 'Accessory (por defecto)' : c.categoria + ' (por defecto)'); $('#mq-mn').placeholder = tel ? 'moto g86 power 5G' : 'nombre del producto (moto buds 2, lenovo ideatab 11…)'; }; tipoSel.onchange = onTipo; onTipo();
   const mn = $('#mq-mn'); mn.oninput = () => { const v = mn.value.trim(); const ex = D.modelos.find(m => m.market_name === v); $('#mq-mn-hint').textContent = !v ? '' : ex ? `Modelo existente · familia ${ex.family} · ${ex.n_sku} SKU` : 'Modelo nuevo: se crea al clasificar'; if (ex && !$('#mq-fam2').value) $('#mq-fam2').value = ex.family || ''; };
 }
 function bindMaestros(){
@@ -1020,7 +1022,7 @@ function bindMaestros(){
   on('[data-mq-cls]', 'click', (e) => mqClasificar(e.currentTarget.dataset.mqCls));
   on('[data-mq-mod]', 'click', (e) => mqModelo(e.currentTarget.dataset.mqMod));
   on('[data-mq-skus]', 'click', (e) => mqSkus(e.currentTarget.dataset.mqSkus));
-  on('[data-mq-fam-tipo]', 'click', (e) => mqFamiliaTipo(e.currentTarget.dataset.mqFamTipo));
+  const qcat = $('#mq-cat'); if (qcat) qcat.onchange = (e) => { C.prodF.cat = e.target.value; renderMain(); };
   const fc = $('#ma-cuenta'); if (fc) fc.onchange = (e) => { C.f.cuenta = e.target.value; renderMain(); };
   const fv = $('#ma-vig'); if (fv) fv.onchange = (e) => { C.f.vig = e.target.checked; renderMain(); };
   const fa = $('#ma-conalias'); if (fa) fa.onchange = (e) => { C.f.conAlias = e.target.checked; renderMain(); };
