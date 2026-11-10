@@ -760,11 +760,14 @@ const FUENTE_LBL = {archivo_agencia:'archivo agencia', base_touch:'Base Touch', 
 async function loadMaestros(){ const C = S.ma; if (C.loading) return; C.loading = true; renderMain(); try { C.data = await rpc('cob_alias_maestro'); } catch(e) { C.data = {error: errMsg(e)}; } finally { C.loading = false; renderMain(); } }
 function viewMaestros(){
   const C = S.ma, M = C.data;
-  if (!M && !C.loading) { setTimeout(loadMaestros, 0); return '<div class="empty">Cargando maestros…</div>'; }
-  if (C.loading && !M) return '<div class="empty">Cargando maestros…</div>';
-  if (M.error) return `<div class="banner bad"><p>${esc(M.error)}</p><button id="ma-retry">Reintentar</button></div>`;
+  const needAlias = !['personas', 'productos'].includes(C.sub);
+  if (needAlias) {
+    if (!M && !C.loading) { setTimeout(loadMaestros, 0); return '<div class="empty">Cargando maestro de tiendas…</div>'; }
+    if (C.loading && !M) return '<div class="empty">Cargando maestro de tiendas…</div>';
+    if (M.error) return `<div class="banner bad"><p>${esc(M.error)}</p><button id="ma-retry">Reintentar</button></div>`;
+  }
   const sub = `<section class="panel"><div class="panel-head"><h2>Maestros</h2><span class="muted">Capa de referencia de TRADE: cuentas, tiendas canónicas, personas y productos, con los alias con que los archivos externos las nombran. No depende del período; las pestañas operativas la consumen y, cuando algo nuevo aparece en ellas, preguntan antes de agregarlo acá.</span></div>
-    <div class="subtabs"><button data-masub="cuentas" aria-current="${C.sub==='cuentas'}">Cuentas</button><button data-masub="tiendas" aria-current="${C.sub==='tiendas'}">Tiendas</button><button data-masub="personas" aria-current="${C.sub==='personas'}">Personas${C.per && !C.per.error ? ` (${C.per.personas.filter(x => x.activo).length})` : ''}</button><button data-masub="productos" aria-current="${C.sub==='productos'}">Productos${C.prod && !C.prod.error && C.prod.pendientes.length ? ` <span class="pill warn" style="padding:1px 7px">${C.prod.pendientes.length} pend.</span>` : ''}</button><button data-masub="probar" aria-current="${C.sub==='probar'}">Probar resolución</button><span class="grow"></span><button id="ma-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button></div></section>`;
+    <div class="subtabs"><button data-masub="cuentas" aria-current="${C.sub==='cuentas'}">Cuentas</button><button data-masub="tiendas" aria-current="${C.sub==='tiendas'}">Tiendas</button><button data-masub="personas" aria-current="${C.sub==='personas'}">Personas${C.per && !C.per.error ? ` (${C.per.personas.filter(x => x.activo).length})` : ''}</button><button data-masub="productos" aria-current="${C.sub==='productos'}">Productos${C.prod && !C.prod.error && C.prod.pendientes.length ? ` <span class="pill warn" style="padding:1px 7px">${C.prod.pendientes.length} pend.</span>` : ''}</button><button data-masub="probar" aria-current="${C.sub==='probar'}">Probar resolución</button><span class="grow"></span>${needAlias ? `<button id="ma-refresh" ${C.loading?'disabled':''}>${C.loading ? 'Actualizando…' : 'Actualizar'}</button>` : ''}</div></section>`;
   return sub + ({tiendas: viewMaTiendas, cuentas: viewMaCuentas, personas: viewMaPersonas, productos: viewMaProductos, probar: viewMaProbar}[C.sub] || viewMaTiendas)();
 }
 function viewMaTiendas(){
@@ -920,6 +923,9 @@ function viewMaProductos(){
   if (C.prodLoading && !D) return '<div class="empty">Cargando productos…</div>';
   if (D.error) return `<div class="banner bad"><p>${esc(D.error)}</p><button id="mq-retry">Reintentar</button></div>`;
   const tels = D.modelos.filter(m => m.tipo === 'telefono'), sinTramo = tels.filter(m => !m.tramo_master && m.volumen > 0).length;
+  const sinCat = D.modelos.filter(m => !m.categoria_codigo || m.cat_mixta);
+  const aviso = sinCat.length ? `<div class="banner warn"><p><b>${sinCat.length} modelo${sinCat.length===1?'':'s'} sin categoría o con SKU en categorías distintas.</b> Usa <b>Editar</b> para dejarlos en una sola.</p></div>` : '';
+  const porCat = {}; for (const m of D.modelos) { const k = m.categoria || '—'; porCat[k] = (porCat[k] || 0) + m.n_sku; }
   const head = `<section class="panel"><div class="panel-head"><h2>Productos</h2><button id="mq-refresh">Actualizar</button></div>
     <div class="statgrid"><div class="stat"><b>${fN(tels.length)}</b><span>modelos teléfono (${fN(D.familias.length)} familias)</span></div><div class="stat"><b>${fN(tels.reduce((s, m) => s + m.n_sku, 0))}</b><span>SKU de teléfono</span></div><div class="stat"><b style="${D.pendientes.length ? 'color:var(--warn)' : ''}">${fN(D.pendientes.length)}</b><span>SKU pendientes de clasificar</span></div><div class="stat"><b style="${D.sin_sku_en_producto.length ? 'color:var(--bad)' : ''}">${fN(D.sin_sku_en_producto.length)}</b><span>detectados sin fila en producto</span></div><div class="stat"><b>${fN(sinTramo)}</b><span>modelos con venta y sin tramo maestro</span></div></div>
     <p class="hint">El maestro tiene dos niveles: <b>modelo</b> (familia + market name, lo que Portafolio clasifica en tramos y lo que mide la meta) y <b>SKU</b> (el código de cada cadena, lo que viene en el maestro de venta). Cada modelo tiene una <b>categoría</b> (Teléfono · PC · Tablet · Motothings con subcategoría · Otro); solo Teléfono mide en mix, meta y cierre. Un SKU <b>pendiente</b> no cuenta hasta que alguien lo clasifique. Portafolio decide el tramo <i>del período</i>; acá se decide qué es cada cosa.</p>
@@ -941,9 +947,7 @@ function viewMaProductos(){
   const catOpts = [...new Set((D.categorias||[]).map(c => c.categoria))].map(k => `<option value="cat:${esc(k)}" ${f.cat==='cat:'+k?'selected':''}>${esc(k)}</option>` + (D.categorias||[]).filter(c => c.categoria === k && c.subcategoria).map(c => `<option value="${esc(c.codigo)}" ${f.cat===c.codigo?'selected':''}>&nbsp;&nbsp;· ${esc(c.subcategoria)}</option>`).join('')).join('');
   const fams = [...new Set(D.modelos.map(m => m.family))].sort();
   const tramoPill = (t) => t == null ? '<span class="muted">—</span>' : `<span class="pill ${t===3?'acc':''}">${TRAMO_LBL[t] || t}</span>`;
-  const sinCat = D.modelos.filter(m => !m.categoria_codigo || m.cat_mixta);
-  const aviso = sinCat.length ? `<div class="banner warn"><p><b>${sinCat.length} modelo${sinCat.length===1?'':'s'} sin categoría o con SKU en categorías distintas.</b> Usa <b>Editar</b> para dejarlos en una sola.</p></div>` : '';
-  const porCat = {}; for (const m of D.modelos) { const k = m.categoria || '—'; porCat[k] = (porCat[k] || 0) + m.n_sku; }
+
   return head + aviso + `<section class="panel"><div class="panel-head"><h2>Modelos</h2><div class="ctrl"><label class="lbl" for="mq-cat">Categoría</label><select id="mq-cat"><option value="">Todas</option>${catOpts}<option value="__sin__" ${f.cat==='__sin__'?'selected':''}>Sin categoría</option></select><label class="lbl" for="mq-fam">Familia</label><select id="mq-fam"><option value="">Todas</option>${fams.map(x => `<option ${f.family===x?'selected':''}>${esc(x)}</option>`).join('')}</select><input id="mq-q" placeholder="Buscar modelo o SKU…" value="${esc(f.q)}" style="min-width:220px"><span class="muted">${fN(rows.length)}</span></div></div>
     <div class="tbl tall"><table><thead><tr><th>Categoría</th><th>Familia</th><th>Modelo (market name)</th><th class="num">SKU</th><th class="num">Volumen 2 años</th><th>Última sem.</th><th>Tramo maestro</th><th>Tramo ${esc(D.periodo.nombre || '')}</th><th>MotoTalk</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
     ${rows.slice(0, 500).map(m => `<tr><td>${catPill(m)}</td><td>${esc(m.family || '—')}</td><td><b>${esc(m.market_name || '(sin market name)')}</b>${m.modelo_tramo && m.modelo_tramo !== m.market_name ? `<div class="muted" style="font-size:12px">${esc(m.modelo_tramo)}</div>` : ''}</td><td class="num" title="${esc((m.skus||[]).join(', '))}">${m.n_sku}</td><td class="num">${fN(m.volumen)}</td><td class="muted">${m.ultima ? String(m.ultima).slice(0,4) + ' W' + String(m.ultima).slice(4) : '—'}</td><td>${tramoPill(m.tramo_master)}</td><td>${m.tramo_periodo != null ? tramoPill(m.tramo_periodo) + (m.mide_periodo === false ? ' <span class="muted">no mide</span>' : '') : '<span class="muted">—</span>'}</td><td>${m.mototalk ? `<span class="pill">${m.mototalk} nombre${m.mototalk===1?'':'s'}</span>` : '<span class="muted">—</span>'}</td>${ro ? '' : `<td><div class="rowact"><button data-mq-mod="${esc(m.family || '')}|${esc(m.market_name || '')}">Editar</button><button class="link" data-mq-skus="${esc(m.family || '')}|${esc(m.market_name || '')}">SKU…</button></div></td>`}</tr>`).join('') || '<tr><td colspan="10" class="empty">Sin modelos con ese filtro.</td></tr>'}
@@ -1029,13 +1033,13 @@ function bindMaestros(){
   const fv = $('#ma-vig'); if (fv) fv.onchange = (e) => { C.f.vig = e.target.checked; renderMain(); };
   const fa = $('#ma-conalias'); if (fa) fa.onchange = (e) => { C.f.conAlias = e.target.checked; renderMain(); };
   const fq = $('#ma-q'); if (fq) { fq.oninput = (e) => { C.f.q = e.target.value; }; fq.onchange = () => renderMain(); fq.onkeydown = (e) => { if (e.key === 'Enter') renderMain(); }; }
-  on('[data-ma-add]', 'click', (e) => { const t = M.tiendas.find(x => String(x.id) === e.currentTarget.dataset.maAdd); maAliasForm({cuentaId: t && t.cuenta_id, tiendaId: t && t.id}); });
+  if (M) on('[data-ma-add]', 'click', (e) => { const t = M.tiendas.find(x => String(x.id) === e.currentTarget.dataset.maAdd); maAliasForm({cuentaId: t && t.cuenta_id, tiendaId: t && t.id}); });
   on('[data-ma-off]', 'click', (e) => maDesactivar('tienda', e.currentTarget.dataset.maOff));
   on('[data-ma-offcta]', 'click', (e) => maDesactivar('cuenta', e.currentTarget.dataset.maOffcta));
   const bc = $('#ma-addcta'); if (bc) bc.onclick = maCuentaForm;
   const br = $('#ma-resolver'); if (br) br.onclick = maResolver;
   const tx = $('#ma-txt'); if (tx) tx.onchange = () => { C.txt = tx.value; };
-  on('[data-ma-fix]', 'click', (e) => { const r = (C.res || []).find(x => String(x.i) === e.currentTarget.dataset.maFix); if (!r) return; maAliasForm({alias: r.texto, cuentaId: r.cuenta_id, tiendaId: r.tienda_id, sugerencias: r.sugerencias}); });
+  if (M) on('[data-ma-fix]', 'click', (e) => { const r = (C.res || []).find(x => String(x.i) === e.currentTarget.dataset.maFix); if (!r) return; maAliasForm({alias: r.texto, cuentaId: r.cuenta_id, tiendaId: r.tienda_id, sugerencias: r.sugerencias}); });
 }
 function bindCobertura(){
   const C = S.cob, on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
@@ -1488,7 +1492,7 @@ function renderMainKeep(){
 function readFld(el, kind){ return kind === 'pct' ? fromPctInput(el.value) : kind === 'int' ? (el.value === '' ? null : Math.round(+el.value)) : kind === 'num' ? (el.value === '' ? null : +el.value) : kind === 'bool' ? (el.value === '' ? null : el.value === 'true') : el.value; }
 function bind(tab){
   const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn));
-  if (tab === 'maestros') { if (S.ma.data) bindMaestros(); return; }
+  if (tab === 'maestros') { if (S.ma.data || ['personas', 'productos'].includes(S.ma.sub)) bindMaestros(); return; }
   if (tab === 'portafolio') {
     on('[data-goto-prod]', 'click', (e) => { e.preventDefault(); S.ma.sub = 'productos'; location.hash = '#maestros'; renderTabs(); renderMain(); });
     const ft = $('#f-tramo'); if (ft) ft.onchange = (e) => { S.tramoFiltro = e.target.value; renderMain(); };
