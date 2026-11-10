@@ -253,6 +253,7 @@ function normBase(d){
     master: Object.fromEntries(arr(d.master).map(r => [r.modelo_nombre, r])),
     moto: Object.fromEntries(arr(d.moto).map(r => [r.accesorio, pickMoto(r)])),
     moto_prev: Object.fromEntries(arr(d.moto_prev).map(r => [r.accesorio, pickMoto(r)])),
+    motoMaestro: arr(d.moto_maestro),
     cuentas: arr(d.cuentas),
     stc: Object.fromEntries(arr(d.stc).map(r => [r.cuenta_id, {b:N(r.pct_base), m:N(r.pct_medio), a:N(r.pct_alto), desde: r.periodo_nombre + ' ' + r.anio, propio: r.anio === S.periodo.anio && r.periodo_nombre === S.periodo.nombre}])),
     rango: Object.fromEntries(arr(d.rango).map(r => [r.cuenta_id, {min:N(r.share_min), max:N(r.share_max), motivo:r.motivo || '', desde: r.periodo_nombre + ' ' + r.anio, propio: r.anio === S.periodo.anio && r.periodo_nombre === S.periodo.nombre}])),
@@ -278,7 +279,8 @@ function editable(b){
 async function loadAll(keepDraft){
   S.busy = true; S.loadError = null; renderHeader();
   try {
-    const d = await rpc('app_estado', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre});
+    const [d, mm] = await Promise.all([rpc('app_estado', {p_anio: S.periodo.anio, p_periodo: S.periodo.nombre}), rpc('mst_motothings').catch(() => [])]);
+    d.moto_maestro = mm;
     S.periodos = d.periodos || []; S.prev = d.prev; S.base = normBase(d);
     const saved = keepDraft ? store('draft:' + perKey(S.periodo)) : null;
     S.work = editable(S.base);
@@ -1217,13 +1219,19 @@ function panelMoto(pl){
   const b = S.base, w = S.work, ro = RO();
   const keys = [...new Set([...Object.keys(b.moto), ...Object.keys(w.moto)])].sort((x, y) => { const a = w.moto[x]||b.moto[x], c = w.moto[y]||b.moto[y]; return (c.mide - a.mide) || ((c.pago||0) - (a.pago||0)) || x.localeCompare(y); });
   const cuentas = b.cuentas.filter(c => b.semanas[String(c.id)]);
+  const maestro = b.motoMaestro || [], mmBy = Object.fromEntries(maestro.map(m => [m.market_name.toLowerCase(), m]));
+  const enPeriodo = new Set(keys.filter(k => w.moto[k]).map(k => ((w.moto[k].match || k).toLowerCase())));
+  const faltan = maestro.filter(m => !enPeriodo.has(m.market_name.toLowerCase()));
+  const huerfanos = keys.filter(k => w.moto[k] && !mmBy[(w.moto[k].match || k).toLowerCase()]);
+  const subPill = (mn) => { const m = mmBy[(mn || '').toLowerCase()]; return m ? `<span class="muted" style="font-size:12px">${esc(m.subcategoria || 'Motothings')}</span>` : '<span class="pill warn" title="No es un modelo Motothings en el maestro: clasifícalo en Maestros › Productos">no está en el maestro</span>'; };
+  const rowsFaltan = faltan.map(m => `<tr class="dim"><td><b>${esc(m.market_name)}</b><div>${subPill(m.market_name)}</div></td><td colspan="${pl?8:7}"><span class="pill warn">sin condiciones de pago</span> <span class="muted">Está en el maestro (${m.n_sku} SKU${m.vendido_12s ? ', con venta o stock reciente' : ', sin venta reciente'}); no paga hasta que se le definan condiciones.</span></td><td>${ro ? '' : `<button data-add-moto-mn="${esc(m.market_name)}">Definir pago</button>`}</td></tr>`).join('');
   const rows = keys.map(k => {
     const x = b.moto[k], y = w.moto[k], pv = b.moto_prev[k];
     if (!y) return `<tr class="removed"><td>${esc(k)}</td><td colspan="${pl?8:7}">Se quita del período</td><td><button class="link" data-undo-moto="${esc(k)}">Deshacer</button></td></tr>`;
     const ch = !same(x, y), auto = y.regla === '5pct_lista', dis = ro ? 'disabled' : '';
     const noex = Object.entries(y.cuentas||{}).filter(([,e]) => e.estado === 'No existe').map(([id]) => cname(id));
     const nStock = cuentas.filter(c => motoExisteSug(String(c.id), k)).length;
-    return `<tr class="${ch?'changed':''} ${y.mide?'':'dim'}"><td><b>${esc(k)}</b><div class="muted" style="font-size:12px">${esc(y.match || k.toLowerCase())}</div></td>
+    return `<tr class="${ch?'changed':''} ${y.mide?'':'dim'}"><td><b>${esc(k)}</b><div>${subPill(y.match || k)}${(y.match || '').toLowerCase() !== k.toLowerCase() ? ` <span class="muted" style="font-size:12px">· ${esc(y.match)}</span>` : ''}</div></td>
       <td><span class="muted" title="Cuentas donde tiene stock o venta en tiendas con promotor; se ajusta en Catálogo por cuenta">${nStock}/${cuentas.length}${noex.length ? ` <span class="pill">no en ${esc(noex.join(', '))}</span>` : ''}</span></td>
       <td><select data-moto="${esc(k)}" data-f="vigencia" aria-label="Ciclo de vida ${esc(k)}" ${dis}><option ${y.vigencia==='Vigente'?'selected':''}>Vigente</option><option ${y.vigencia==='EOL'?'selected':''}>EOL</option></select></td>
       <td><label class="sw"><input type="checkbox" data-moto="${esc(k)}" data-f="mide" ${y.mide?'checked':''} ${dis}> ${y.mide ? 'Paga' : 'No paga'}</label></td>
@@ -1235,9 +1243,10 @@ function panelMoto(pl){
   }).join('');
   const nPaga = keys.filter(k => w.moto[k] && w.moto[k].mide).length, nNo = keys.filter(k => w.moto[k] && !w.moto[k].mide).length;
   return `<section class="panel"><div class="panel-head"><h2>Motothings</h2><div class="ctrl"><span class="pill ok">${nPaga} pagan</span><span class="pill">${nNo} no pagan</span><span class="muted">Pago lineal por unidad, sin gate y sin techo; no modifican la meta</span></div></div>
+    <p class="hint">La lista de productos sale del <b>maestro</b> (Maestros › Productos, categoría Motothings): acá solo se definen las condiciones de pago del período. Un Motothing nuevo en el maestro aparece abajo como <i>sin condiciones de pago</i> y no paga hasta que alguien las complete. Para agregar o quitar un producto de la lista, clasifícalo en el maestro.${huerfanos.length ? ` <b>${huerfanos.length} fila${huerfanos.length===1?'':'s'} del período no corresponde${huerfanos.length===1?'':'n'} a un modelo Motothings del maestro</b> (${esc(huerfanos.join(', '))}): revísalas.` : ''}</p>
     <p class="hint">Mismo flujo que los teléfonos: <b>1</b> en qué cuentas <b>existe</b> (se sugiere por stock y venta; se corrige en Catálogo por cuenta) → <b>2</b> ciclo de vida → <b>3</b> si <b>paga</b> este período → <b>4</b> cuánto: con <b>5% de lista</b> el pago se calcula solo (precio de lista más alto en canales oficiales, redondeado a $500); <b>Manual</b> sirve mientras falta el precio. Un accesorio que no paga sigue en el catálogo pero no genera variable.</p>
-    <div class="tbl"><table><thead><tr><th>Accesorio</th><th><span class="step">1</span>Existe en</th><th><span class="step">2</span>Ciclo de vida</th><th><span class="step">3</span>Paga</th><th class="num"><span class="step">4</span>Precio de lista</th><th>Regla</th><th class="num">Pago por unidad</th><th>Nota</th>${pl?`<th class="num">${esc(pl)}</th>`:''}<th></th></tr></thead><tbody>${rows || `<tr><td colspan="10" class="empty">Sin accesorios.</td></tr>`}</tbody></table></div>
-    ${ro ? '' : `<div class="addrow"><div class="f"><label class="lbl" for="n-acc">Accesorio</label><input id="n-acc" placeholder="Moto Buds 3"></div><div class="f"><label class="lbl" for="n-acc-match">Nombre de mercado en TRADE</label><input id="n-acc-match" class="w-l" placeholder="moto buds 3"></div><div class="f"><label class="lbl" for="n-precio">Precio de lista</label><input id="n-precio" type="number" step="990" min="0"></div><button id="b-add-moto">Agregar accesorio</button></div>`}</section>`;
+    <div class="tbl"><table><thead><tr><th>Accesorio</th><th><span class="step">1</span>Existe en</th><th><span class="step">2</span>Ciclo de vida</th><th><span class="step">3</span>Paga</th><th class="num"><span class="step">4</span>Precio de lista</th><th>Regla</th><th class="num">Pago por unidad</th><th>Nota</th>${pl?`<th class="num">${esc(pl)}</th>`:''}<th></th></tr></thead><tbody>${rows + rowsFaltan || `<tr><td colspan="10" class="empty">No hay modelos Motothings en el maestro.</td></tr>`}</tbody></table></div>
+    ${!maestro.length ? '<p class="hint">No hay modelos con categoría Motothings en el maestro. Clasifícalos en <a href="#maestros" data-goto-prod>Maestros › Productos</a>.</p>' : ''}</section>`;
 }
 function panelMotoCuenta(cid){
   const b = S.base, w = S.work, nombre = cname(cid), ro = RO();
@@ -1510,7 +1519,8 @@ function bind(tab){
     on('[data-moto]', 'change', (e) => { const el = e.target, m = S.work.moto[el.dataset.moto], f = el.dataset.f; if (f === 'precio') m.precio = el.value === '' ? null : +el.value; else if (f === 'pago') m.pago = el.value === '' ? null : +el.value; else if (f === 'mide') m.mide = el.checked; else m[f] = el.value; if (m.regla === '5pct_lista') { if (m.precio == null) { m.regla = 'manual'; toast('Sin precio de lista el pago queda manual'); } else m.pago = pago5(m.precio); } changed(); });
     on('[data-del-moto]', 'click', (e) => { const k = e.target.dataset.delMoto; if (S.base.moto[k]) S.work.moto[k] = null; else delete S.work.moto[k]; changed(); });
     on('[data-undo-moto]', 'click', (e) => { const k = e.target.dataset.undoMoto; S.work.moto[k] = clone(S.base.moto[k]); changed(); });
-    const bam = $('#b-add-moto'); if (bam) bam.onclick = () => { const a = $('#n-acc').value.trim(), p = $('#n-precio').value, mt = ($('#n-acc-match').value.trim() || a).toLowerCase(); if (!a) { toast('Escribe el nombre del accesorio'); return; } if (S.work.moto[a]) { toast('Ese accesorio ya está'); return; } const precio = p === '' ? null : +p; S.work.moto[a] = {precio, pago: precio == null ? 0 : pago5(precio), regla: precio == null ? 'manual' : '5pct_lista', nota: precio == null ? 'precio pendiente' : '', match: mt, vigencia: 'Vigente', mide: true, cuentas: {}}; changed(); };
+    on('[data-add-moto-mn]', 'click', (e) => { const mn = e.currentTarget.dataset.addMotoMn; const label = mn.replace(/\b\w/g, c => c.toUpperCase()); if (S.work.moto[label]) { toast('Ya está en el período'); return; } S.work.moto[label] = {precio: null, pago: 0, regla: 'manual', nota: 'desde el maestro; precio pendiente', match: mn.toLowerCase(), vigencia: 'Vigente', mide: true, cuentas: {}}; changed(); toast(`${label}: define precio de lista o pago manual`); });
+    on('[data-goto-prod]', 'click', (e) => { e.preventDefault(); S.ma.sub = 'productos'; location.hash = '#maestros'; renderTabs(); renderMain(); });
   }
   if (tab === 'meta') {
     on('[id^="m-"][data-fld]', 'change', (e) => { const el = e.target; S.work.pmeta[el.dataset.fld] = readFld(el, el.dataset.kind); changed(); });
