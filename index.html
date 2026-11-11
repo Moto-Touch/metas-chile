@@ -238,6 +238,8 @@ function errMsg(e){
 // ---------- carga ----------
 function pickParams(r){ return {gate:N(r.gate_volumen_pct), peso_medio:N(r.peso_medio), peso_alto:N(r.peso_alto), piso:N(r.piso_tramo_pct), techo:N(r.techo_tramo_pct), umbral90:N(r.regla90_umbral), masivo_x: r.masivo_max_diario == null ? null : +r.masivo_max_diario, masivo_desc: r.masivo_descuenta_cumplimiento, estado: r.estado, notas: r.notas || ''}; }
 function pickPMeta(r){ return {semanas: r.semanas == null ? null : +r.semanas, gfk:N(r.factor_gfk), share_def:N(r.share_objetivo_default), share_sp:N(r.share_sin_promotor), share_sp_alto:N(r.share_sin_promotor_tam_alto), umbral_sp: r.umbral_tam_sin_promotor == null ? null : +r.umbral_tam_sin_promotor, piso_desempeno: !!r.piso_desempeno, evento: r.evento_nombre || '', alza_medio:N(r.alza_medio_pct), alza_medio_extra:N(r.alza_medio_extra_pct), alza_alto:N(r.alza_alto_pct), min_sig: r.min_signature_alto == null ? 0 : +r.min_signature_alto, f_fuera:N(r.factor_stock_fuera_meta), por_stock: !!r.reparto_por_stock, notas: r.notas || ''}; }
+// el nombre de mercado solo se muestra si no es el mismo nombre del modelo (ignorando mayúsculas, espacios y el prefijo 'moto'/'motorola')
+function mnDistinto(k, m){ const n = x => String(x||'').toLowerCase().replace(/^moto(rola)?\s+/, '').replace(/\s+/g, ''); return !!m && n(k) !== n(m); }
 function pickTramo(r){ return {match: r.market_name_match, tramo: +r.tramo, sp: !!r.es_super_premium, pago: N(r.pago_unidad_sp), vigencia: r.vigencia, mide: r.mide !== false, cuentas: {}}; }
 function pickMoto(r){ return {precio: N(r.precio_lista), pago: N(r.pago_unidad), regla: r.regla, nota: r.nota || '', match: r.market_name_match || '', vigencia: r.vigencia || 'Vigente', mide: r.mide !== false, cuentas: {}}; }
 function pickRegla(r){ return {prod:N(r.piso_productividad_dia), tope:N(r.tope_share_piso), min_b:N(r.min_base), min_m:N(r.min_medio), min_a:N(r.min_alto), max_a:N(r.max_alto), sig:r.min_signature_sin_stock == null ? null : +r.min_signature_sin_stock, por_venta: !!r.reparto_por_venta, motivo: r.motivo || ''}; }
@@ -1125,7 +1127,7 @@ function viewPortafolio(){
     const x = b.tramos[k], y = w.tramos[k], m = b.master[k], pv = b.tramos_prev[k];
     if (!y) return `<tr class="removed"><td>${esc(k)}</td><td colspan="${pl?8:7}">Se quita del período</td><td><button class="link" data-undo-tramo="${esc(k)}">Deshacer</button></td></tr>`;
     const ch = !same(x, y), difM = m && m.tramo !== y.tramo;
-    return `<tr class="${ch?'changed':''} ${y.mide?'':'dim'}"><td><b>${esc(k)}</b><div class="muted" style="font-size:12px">${esc(y.match)}</div></td>
+    return `<tr class="${ch?'changed':''} ${y.mide?'':'dim'}"><td><b>${esc(k)}</b>${mnDistinto(k, y.match) ? `<div class="muted" style="font-size:12px">${esc(y.match)}</div>` : ''}</td>
       <td><select data-tramo="${esc(k)}" data-f="vigencia" aria-label="Ciclo de vida ${esc(k)}" ${RO()?'disabled':''}><option ${y.vigencia==='Vigente'?'selected':''}>Vigente</option><option ${y.vigencia==='EOL'?'selected':''}>EOL</option></select></td>
       <td><label class="sw"><input type="checkbox" data-tramo="${esc(k)}" data-f="mide" ${y.mide?'checked':''} ${RO()?'disabled':''}> ${y.mide ? 'Mide' : 'No mide'}</label></td>
       <td><select data-tramo="${esc(k)}" data-f="tramo" aria-label="Tramo de ${esc(k)}" ${RO()||!y.mide?'disabled':''}>${[1,2,3].map(t => `<option value="${t}" ${y.tramo===t?'selected':''}>${TRAMO_DESC[t]}</option>`).join('')}</select></td>
