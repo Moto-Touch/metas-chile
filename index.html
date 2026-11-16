@@ -758,7 +758,7 @@ function cobFirmar(){
 }
 // ----- Maestros (pestaña propia): tiendas canónicas, alias de tienda y de cuenta -----
 const VIA_LBL = {codigo:'código', alias:'alias', legacy:'código legacy', mototalk:'nombre MotoTalk', nombre:'nombre exacto'};
-const FUENTE_LBL = {archivo_agencia:'archivo agencia', base_touch:'Base Touch', geovictoria:'GeoVictoria', otro:'otro'};
+const FUENTE_LBL = {archivo_agencia:'archivo agencia', base_touch:'Base Touch', geovictoria:'GeoVictoria', mototalk:'MotoTalk', otro:'otro'};
 async function loadMaestros(){ const C = S.ma; if (C.loading) return; C.loading = true; renderMain(); try { C.data = await rpc('cob_alias_maestro'); } catch(e) { C.data = {error: errMsg(e)}; } finally { C.loading = false; renderMain(); } }
 function viewMaestros(){
   const C = S.ma, M = C.data;
