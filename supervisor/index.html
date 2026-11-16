@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Copiloto · Supervisor</title>
+<meta name="theme-color" content="#0f6b4f">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#eef0ea; --fg:#1b1f1a; --muted:#5e665c; --line:#cfd5c9; --panel:#ffffff;
+  --accent:#0f6b4f; --accent-fg:#ffffff;
+  --ok:#1d7a3a; --warn:#b26a00; --bad:#b3261e; --calm:#2b5f9e;
+  --ok-soft:#dff3e3; --warn-soft:#fdebcc; --bad-soft:#fadcda; --calm-soft:#dde8f5; --none-soft:#e6e8e3;
+  --display:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141714; --fg:#e8ebe5; --muted:#9aa396; --line:#2b312a; --panel:#1c201c;
+  --accent:#2fbf8a; --accent-fg:#06281b;
+  --ok:#5fd68a; --warn:#f0b457; --bad:#f08a82; --calm:#7fb0ea;
+  --ok-soft:#163d24; --warn-soft:#3f2f10; --bad-soft:#44201d; --calm-soft:#1b2d44; --none-soft:#232823; color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--display);font-size:15px;line-height:1.4;padding-top:env(safe-area-inset-top,0px)}
+header{position:sticky;top:0;z-index:5;background:var(--accent);color:var(--accent-fg);padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));display:flex;align-items:center;gap:10px}
+header h1{font-size:16px;font-weight:600;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header button{background:transparent;border:1px solid rgba(255,255,255,.4);color:inherit;border-radius:8px;padding:5px 9px;font:inherit;font-size:13px}
+main{padding:14px max(16px,env(safe-area-inset-right,0px)) 90px max(16px,env(safe-area-inset-left,0px));max-width:720px;margin:0 auto}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+nav.tabs a{flex:1;text-align:center;padding:10px 4px 8px;text-decoration:none;color:var(--muted);font-size:12.5px;font-weight:500}
+nav.tabs a.on{color:var(--accent)}
+nav.tabs a b{display:block;font-size:18px;font-weight:400}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.card.tap{cursor:pointer}
+.card.tap:active{opacity:.8}
+.row{display:flex;align-items:center;gap:10px}
+.row .grow{flex:1;min-width:0}
+.name{font-weight:600}
+.sub{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.bad{background:var(--bad-soft);color:var(--bad)}.pill.calm{background:var(--calm-soft);color:var(--calm)}.pill.none{background:var(--none-soft);color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.kpi b{display:block;font-size:20px;font-weight:600;font-family:var(--mono)}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.btn{background:transparent;color:var(--accent);border:1px solid var(--line);border-radius:8px;padding:8px 11px;font:inherit;font-size:13.5px;font-weight:500;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn:disabled{opacity:.5}
+input,select,textarea{width:100%;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.err{color:var(--bad);font-size:13.5px;margin-top:8px}
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px}
+.day{border:1px solid var(--line);border-radius:8px;padding:6px 4px;text-align:center;font-size:11px;color:var(--muted)}
+.day b{display:block;font-family:var(--mono);font-size:12px;color:var(--fg)}
+.day.ok{border-color:var(--ok);background:var(--ok-soft)}.day.warn{border-color:var(--warn);background:var(--warn-soft)}.day.bad{border-color:var(--bad);background:var(--bad-soft)}
+.day span{display:block;font-size:14px;line-height:1.2}
+.seg{display:flex;gap:6px;margin-bottom:10px}
+.seg button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px;font:inherit;font-size:13px;color:var(--muted)}
+.seg button.on{border-color:var(--accent);color:var(--accent);font-weight:500}
+.empty{color:var(--muted);text-align:center;padding:30px 10px}
+.hint{font-size:12.5px;color:var(--muted)}
+details summary{cursor:pointer;color:var(--muted);font-size:13px}
+.bar{height:6px;background:var(--none-soft);border-radius:3px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;z-index:9}
+</style>
+</head>
+<body>
+<header><h1 id="title">Copiloto · Supervisor</h1><button id="btn-out" hidden>Salir</button></header>
+<main id="app"></main>
+<nav class="tabs" id="tabs" hidden>
+  <a href="#cartera" data-t="cartera"><b>👥</b>Cartera</a>
+  <a href="#alertas" data-t="alertas"><b>🔔</b>Alertas</a>
+  <a href="#tablero" data-t="tablero"><b>📊</b>Tablero</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const SUPA_URL='https://noskbefdrtayhwydlbfx.supabase.co';
+const SUPA_KEY='sb_publishable_5aLhvx4RAy5yqmRuLz4-zg_ZfuEppFV';
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+const $=s=>document.querySelector(s);
+const S={user:null, editor:false, supervisores:[], supSel:null, cartera:null, alertas:null, tablero:null, ficha:null, filtro:'abiertas'};
+const Q={reconocer:['Reconocer','ok'],destrabar:['Destrabar','warn'],visitar:['Visitar primero','bad'],no_intervenir:['No intervenir','calm'],sin_datos:['Sin datos aún','none']};
+const SEV={alta:'bad',media:'warn',baja:'none',positiva:'ok'};
+const EST={abierta:['Abierta','bad'],pendiente:['Pospuesta','warn'],en_gestion:['En gestión','warn'],escalada:['Escalada','calm'],cerrada:['Cerrada','ok']};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cap=s=>s?s.charAt(0)+s.slice(1).toLowerCase():'';
+const nice=s=>String(s||'').split(' ').map(cap).join(' ');
+const fecha=d=>d?new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'short'}):'';
+const hora=d=>d?new Date(d).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}):'';
+function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2200);}
+async function rpc(fn,args){const {data,error}=await sb.rpc(fn,args||{});if(error)throw error;return data;}
+function errMsg(e){const m=(e&&(e.message||e.msg))||String(e);if(/Usuario sin acceso/.test(m))return 'Tu usuario no tiene acceso a esta aplicación. Pide a Motorola que lo habilite.';if(/sin cartera/.test(m))return 'Tu usuario no está ligado a una cartera de supervisor todavía.';if(/Invalid login/.test(m))return 'Correo o clave incorrectos.';return m;}
+function supArgs(){return S.editor&&S.supSel?{p_supervisor:S.supSel}:{};}
+
+// ---------- vistas ----------
+function viewLogin(msg){
+  $('#tabs').hidden=true;$('#btn-out').hidden=true;
+  $('#app').innerHTML=`<div class="card" style="margin-top:30px"><div class="name" style="font-size:18px">Entrar</div><p class="hint">La misma cuenta que usas en la app de metas.</p>
+  <form id="f-login"><label for="l-email">Correo</label><input id="l-email" type="email" autocomplete="username" required><label for="l-pass">Clave</label><input id="l-pass" type="password" autocomplete="current-password" required>
+  <div class="btns"><button class="btn primary" type="submit">Entrar</button></div><div class="err" id="l-err">${esc(msg||'')}</div></form></div>`;
+  $('#f-login').onsubmit=async e=>{e.preventDefault();$('#l-err').textContent='';try{const {error}=await sb.auth.signInWithPassword({email:$('#l-email').value.trim(),password:$('#l-pass').value});if(error)throw error;await afterLogin();}catch(err){$('#l-err').textContent=errMsg(err);}};
+}
+function selectorSup(){
+  if(!S.editor)return '';
+  return `<label for="sel-sup">Ver como</label><select id="sel-sup"><option value="">Todas las zonas</option>${S.supervisores.map(s=>`<option value="${s.persona_id}" ${S.supSel==s.persona_id?'selected':''}>${esc(nice(s.nombre_asignacion))}</option>`).join('')}</select>`;
+}
+async function viewCartera(){
+  nav('cartera');
+  $('#app').innerHTML=`${selectorSup()}<div class="empty">Cargando cartera…</div>`;
+  bindSel();
+  try{ S.cartera=await rpc('sup_cartera',{p_fecha:new Date().toISOString().slice(0,10),...supArgs()}); }catch(e){$('#app').innerHTML+=`<div class="err">${esc(errMsg(e))}</div>`;return;}
+  const g={};S.cartera.forEach(p=>{(g[p.cuadrante]=g[p.cuadrante]||[]).push(p);});
+  const orden=['visitar','destrabar','no_intervenir','reconocer','sin_datos'];
+  const resumen=`<div class="kpis">${orden.filter(k=>k!=='sin_datos').map(k=>`<div class="kpi"><b>${(g[k]||[]).length}</b><span>${Q[k][0]}</span></div>`).join('')}</div>
+  <p class="hint">${S.cartera.length} promotores · ${(g.sin_datos||[]).length} sin datos del copiloto todavía. Engagement = turnos con botón tocado en los últimos 5; ritmo = venta MotoTalk contra lo que necesita para el 70%.</p>`;
+  const card=p=>`<div class="card tap" data-p="${p.persona_id}"><div class="row"><div class="grow"><div class="name">${esc(nice(p.nombre_pila))} <span class="sub" style="display:inline">· ${esc(nice(p.persona).split(' ').slice(-2).join(' '))}</span></div><div class="sub">${esc(nice(p.tienda))} · ${esc(p.cuenta)}${S.editor&&!S.supSel?` · ${esc(nice(p.supervisor))}`:''}</div></div>
+    <div style="text-align:right"><span class="pill ${Q[p.cuadrante][1]}">${Q[p.cuadrante][0]}</span>${p.alertas_abiertas>0?`<div class="sub num">🔔 ${p.alertas_abiertas}</div>`:''}</div></div>
+    <div class="row" style="margin-top:8px;gap:14px"><div class="sub num">👆 ${p.toques_5}/${p.turnos_5}</div><div class="sub num">✅ ${p.cumplidos_5}/${p.compromisos_5}</div><div class="grow"><div class="sub num">ritmo ${p.ritmo??'—'}% · ${p.venta_periodo} de ${p.meta_total??'—'}</div><div class="bar"><i style="width:${Math.min(100,p.ritmo||0)}%"></i></div></div></div></div>`;
+  $('#app').innerHTML=selectorSup()+resumen+orden.filter(k=>g[k]).map(k=>`<div class="eyebrow">${Q[k][0]} · ${g[k].length}</div>`+g[k].map(card).join('')).join('');
+  bindSel(); document.querySelectorAll('.card.tap').forEach(c=>c.onclick=()=>location.hash='#promotor/'+c.dataset.p);
+}
+function bindSel(){const s=$('#sel-sup');if(s)s.onchange=()=>{S.supSel=s.value?+s.value:null;route();};}
+function diaClass(d){ if(d.seguimiento==='cumplio')return 'ok'; if(d.toco&&d.compromiso)return 'warn'; if(!d.toco)return 'bad'; return ''; }
+function diaIcon(d){ if(d.marco===false)return '⏰'; if(d.seguimiento==='cumplio')return '✅'; if(d.toco&&d.compromiso)return '🤝'; if(d.toco)return '👆'; return '·'; }
+async function viewFicha(id){
+  nav('cartera');
+  $('#app').innerHTML='<div class="empty">Cargando ficha…</div>';
+  try{ S.ficha=await rpc('sup_ficha',{p_persona:+id,p_fecha:new Date().toISOString().slice(0,10)}); }catch(e){$('#app').innerHTML=`<div class="err">${esc(errMsg(e))}</div><div class="btns"><a class="btn" href="#cartera">Volver</a></div>`;return;}
+  const f=S.ficha, p=f.persona;
+  const dias=f.dias.slice(0,20);
+  const abiertas=f.alertas.filter(a=>['abierta','pendiente','en_gestion','escalada'].includes(a.estado));
+  const objeciones={}, prefieren={};
+  f.dias.forEach(d=>{if(d.objecion)objeciones[d.objecion]=(objeciones[d.objecion]||0)+1; if(d.prefiere)prefieren[d.prefiere]=(prefieren[d.prefiere]||0)+1;});
+  $('#app').innerHTML=`<a class="btn" href="#cartera" style="display:inline-block;margin-bottom:10px">‹ Cartera</a>
+  <div class="card"><div class="name" style="font-size:18px">${esc(nice(p.nombre_pila))} <span class="sub" style="display:inline">${esc(nice(p.nombre))}</span></div><div class="sub">${esc(nice(p.tienda||''))} · ${esc(p.cuenta||'')}</div>
+  <div class="hint" style="margin-top:6px">${p.consentimiento?`Consentimiento ${fecha(p.consentimiento)}`:'Sin consentimiento registrado'}${p.baja?` · <b>BAJA ${fecha(p.baja)}</b>`:''}</div></div>
+  ${abiertas.length?`<div class="eyebrow">Alertas abiertas</div>${abiertas.map(cardAlerta).join('')}`:''}
+  <div class="eyebrow">Últimos ${dias.length} turnos</div>
+  <div class="card"><div class="strip">${dias.map(d=>`<div class="day ${diaClass(d)}" title="${esc(d.escenario||'')}"><b>${fecha(d.fecha).replace('.','')}</b><span>${diaIcon(d)}</span>${d.venta!=null?`<span class="num" style="font-size:11px">${d.venta}</span>`:''}</div>`).join('')||'<span class="hint">Sin datos del copiloto todavía.</span>'}</div>
+  <p class="hint">✅ cumplió · 🤝 se comprometió · 👆 tocó · ⏰ sin marcación · número = venta MotoTalk del día</p></div>
+  <div class="eyebrow">Lo que dice</div>
+  <div class="card">${Object.keys(objeciones).length?`<div><b>Objeciones:</b> ${Object.entries(objeciones).map(([k,v])=>`${esc(k)} (${v})`).join(', ')}</div>`:''}
+  ${Object.keys(prefieren).length?`<div><b>Modelos que le piden:</b> ${Object.entries(prefieren).map(([k,v])=>`${esc(k)} (${v})`).join(', ')}</div>`:''}
+  ${f.dias.filter(d=>d.dificil||d.tarde).length?`<div><b>Motivos de días difíciles:</b> ${[...new Set(f.dias.flatMap(d=>[d.dificil,d.tarde]).filter(Boolean))].map(esc).join(', ')}</div>`:''}
+  ${!Object.keys(objeciones).length&&!Object.keys(prefieren).length&&!f.dias.filter(d=>d.dificil||d.tarde).length?'<span class="hint">Todavía no registra objeciones ni motivos.</span>':''}</div>
+  <div class="eyebrow">Historial de alertas (90 días)</div>
+  ${f.alertas.filter(a=>a.estado==='cerrada').map(cardAlerta).join('')||'<div class="card hint">Sin alertas cerradas.</div>'}`;
+  bindAlertas();
+}
+function cardAlerta(a){
+  const open=['abierta','pendiente'].includes(a.estado), ges=a.estado==='en_gestion';
+  const who=a.nombre_pila?`<div class="name">${esc(nice(a.nombre_pila))} <span class="sub" style="display:inline">· ${esc(nice(a.tienda||''))}</span></div>`:'';
+  return `<div class="card" data-a="${a.id}">${who}<div class="row"><div class="grow"><div class="${who?'':'name'}">${esc(a.titulo)}</div></div><span class="pill ${SEV[a.severidad]}">${a.severidad}</span><span class="pill ${EST[a.estado][1]}">${EST[a.estado][0]}</span></div>
+  <div class="sub" style="white-space:normal;margin-top:4px">${esc(a.detalle||'')}</div>
+  ${a.accion?`<div style="margin-top:4px">→ ${esc(a.accion)}</div>`:''}
+  <div class="hint" style="margin-top:4px">${fecha(a.abierta_en)} ${hora(a.abierta_en)}${a.gestion?` · ${esc(a.gestion)} ${hora(a.gestion_en)}`:''}${a.resultado?` · ${esc(a.resultado)}`:''}${a.nota?` · <i>${esc(a.nota)}</i>`:''}</div>
+  ${open?`<div class="btns">${a.severidad==='positiva'?`<button class="btn primary" data-act="reconocido">Se lo digo yo</button>`:`<button class="btn primary" data-act="llamo">Lo llamo</button><button class="btn" data-act="visito">Lo visito</button><button class="btn" data-act="escalo">Escalo</button>`}<button class="btn" data-act="pospuesta">Después</button><button class="btn" data-act="no_aplica">No aplica</button></div>`:''}
+  ${ges?`<div class="btns"><button class="btn primary" data-act="resuelto">Resuelto</button><button class="btn" data-act="sigue">Sigue igual</button><button class="btn" data-act="pide_ayuda">Necesito ayuda</button></div>`:''}</div>`;
+}
+function bindAlertas(){
+  document.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{
+    const id=+b.closest('[data-a]').dataset.a, act=b.dataset.act; let nota=null;
+    if(act==='no_aplica'||act==='pide_ayuda'||act==='sigue'){ nota=prompt(act==='no_aplica'?'¿Por qué no aplica? (ayuda a ajustar la regla)':'Una línea de contexto (opcional)'); if(act==='no_aplica'&&nota===null)return; }
+    b.disabled=true;
+    try{ await rpc('sup_alerta_gestionar',{p_id:id,p_accion:act,p_nota:nota||null}); toast('Anotado'); route(); }catch(e){toast(errMsg(e));b.disabled=false;}
+  });
+}
+async function viewAlertas(){
+  nav('alertas');
+  $('#app').innerHTML=`${selectorSup()}<div class="seg">${['abiertas','cerrada'].map(k=>`<button data-f="${k}" class="${S.filtro===k?'on':''}">${k==='abiertas'?'Abiertas':'Cerradas'}</button>`).join('')}</div><div class="empty" id="al-list">Cargando…</div>`;
+  bindSel(); document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{S.filtro=b.dataset.f;viewAlertas();});
+  try{ S.alertas=await rpc('sup_alertas',{p_estado:S.filtro,...supArgs()}); }catch(e){$('#al-list').innerHTML=`<div class="err">${esc(errMsg(e))}</div>`;return;}
+  const grp=k=>S.alertas.filter(a=>a.estado===k);
+  const secs=S.filtro==='abiertas'?[['abierta','Por responder'],['pendiente','Pospuestas'],['en_gestion','En gestión: ¿cómo te fue?'],['escalada','Escaladas']]:[['cerrada','Cerradas']];
+  $('#al-list').outerHTML=secs.filter(([k])=>grp(k).length).map(([k,t])=>`<div class="eyebrow">${t} · ${grp(k).length}</div>`+grp(k).map(cardAlerta).join('')).join('')||'<div class="empty">Nada por aquí.</div>';
+  bindAlertas();
+}
+async function viewTablero(){
+  nav('tablero');
+  $('#app').innerHTML=`${selectorSup()}<div class="empty">Cargando…</div>`; bindSel();
+  try{ S.tablero=await rpc('sup_tablero',{p_desde:new Date(Date.now()-28*864e5).toISOString().slice(0,10),...supArgs()}); if(!S.cartera) S.cartera=await rpc('sup_cartera',{p_fecha:new Date().toISOString().slice(0,10),...supArgs()}); }catch(e){$('#app').innerHTML+=`<div class="err">${esc(errMsg(e))}</div>`;return;}
+  const t=S.tablero, pct=(a,b)=>b?Math.round(100*a/b)+'%':'—';
+  const c=S.cartera, con=c.filter(p=>p.turnos_5>0);
+  const eng=con.length?(con.reduce((s,p)=>s+p.toques_5,0)/con.length).toFixed(1):'—';
+  const cump=con.reduce((s,p)=>s+p.compromisos_5,0); const cumpl=con.reduce((s,p)=>s+p.cumplidos_5,0);
+  $('#app').innerHTML=selectorSup()+`<div class="eyebrow">Alertas · últimas 4 semanas</div>
+  <div class="kpis"><div class="kpi"><b>${t.recibidas}</b><span>recibidas</span></div><div class="kpi"><b>${pct(t.atendidas_24h,t.recibidas)}</b><span>atendidas en 24 h</span></div><div class="kpi"><b>${pct(t.resueltas,t.gestionadas)}</b><span>resueltas / gestionadas</span></div><div class="kpi"><b>${t.no_aplica}</b><span>no aplica</span></div></div>
+  <p class="hint">${t.abiertas} abiertas ahora · ${t.pide_ayuda} con ayuda pedida al coordinador.${t.no_aplica>=3?' Varias "no aplica": conviene revisar las reglas de tu zona.':''}</p>
+  <div class="eyebrow">Cartera · últimos 5 turnos</div>
+  <div class="kpis"><div class="kpi"><b>${eng}</b><span>toques por promotor (de 5)</span></div><div class="kpi"><b>${pct(cumpl,cump)}</b><span>compromisos cumplidos</span></div><div class="kpi"><b>${c.filter(p=>p.cuadrante==='visitar').length}</b><span>en Visitar primero</span></div><div class="kpi"><b>${c.filter(p=>p.cuadrante==='reconocer').length}</b><span>en Reconocer</span></div></div>
+  <p class="hint">${con.length} de ${c.length} promotores con datos del copiloto. El tablero sale solo de cómo respondes las alertas; no hay nada que llenar.</p>`;
+}
+
+// ---------- navegación ----------
+function nav(t){$('#tabs').hidden=false;$('#btn-out').hidden=false;document.querySelectorAll('nav.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.t===t));}
+function route(){
+  if(!S.user)return viewLogin();
+  const h=location.hash||'#cartera';
+  if(h.startsWith('#promotor/'))return viewFicha(h.split('/')[1]);
+  if(h==='#alertas')return viewAlertas();
+  if(h==='#tablero')return viewTablero();
+  return viewCartera();
+}
+async function afterLogin(){
+  const {data}=await sb.auth.getUser(); S.user=data.user;
+  try{ const r=await sb.rpc('sup_actual'); if(r.error)throw r.error; S.editor=r.data===null; }catch(e){ S.user=null; await sb.auth.signOut(); return viewLogin(errMsg(e)); }
+  if(S.editor){ try{ S.supervisores=await rpc('sup_lista'); }catch(e){ S.supervisores=[]; } }
+  $('#title').textContent=S.editor?'Copiloto · Supervisores':'Copiloto · Mi cartera';
+  route();
+}
+$('#btn-out').onclick=async()=>{await sb.auth.signOut();S.user=null;location.hash='';viewLogin();};
+window.addEventListener('hashchange',route);
+(async()=>{const {data}=await sb.auth.getSession(); if(data.session) await afterLogin(); else viewLogin();})();
+</script>
+</body>
+</html>
