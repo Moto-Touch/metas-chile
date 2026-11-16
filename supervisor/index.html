@@ -66,6 +66,35 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 details summary{cursor:pointer;color:var(--muted);font-size:13px}
 .bar{height:6px;background:var(--none-soft);border-radius:3px;overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;background:var(--accent)}
+/* venta: avance por tramo, barras por día (scroll horizontal) y detalle del día */
+:root{--t-base:#8b938a;--t-medio:var(--calm);--t-alto:var(--accent);--t-sp:var(--warn)}
+.prog{margin-top:10px}.prog:first-child{margin-top:0}
+.prog .bar{position:relative;height:8px;overflow:visible}
+.prog .bar i{border-radius:3px}
+.prog .bar i.s-medio{background:var(--t-medio)}.prog .bar i.s-alto{background:var(--t-alto)}
+.prog .bar em{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--fg);opacity:.55}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chart{display:flex;align-items:flex-end;gap:3px;overflow-x:auto;padding:4px 2px 6px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.col{flex:0 0 36px;background:transparent;border:1px solid transparent;border-radius:8px;padding:3px 0 4px;font:inherit;color:var(--fg);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.col.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.col .n{font-family:var(--mono);font-size:12px;font-weight:500;min-height:16px}
+.col .stack{width:20px;height:92px;display:flex;flex-direction:column;justify-content:flex-end;border-bottom:2px solid var(--line)}
+.col .stack i{display:block;width:100%}
+.col .stack i:first-child{border-radius:3px 3px 0 0}
+.col .d{font-size:10.5px;color:var(--muted);line-height:1.15;text-align:center}
+.col .d b{display:block;font-family:var(--mono);font-size:11.5px;color:var(--fg);font-weight:500}
+.col.finde .d{color:var(--warn)}
+.col .th{font-size:9.5px;font-family:var(--mono);color:var(--muted);min-height:12px}
+.s-base{background:var(--t-base)}.s-medio{background:var(--t-medio)}.s-alto{background:var(--t-alto)}.s-sp{background:var(--t-sp)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item .q{font-family:var(--mono);font-size:16px;font-weight:600;min-width:28px;text-align:right}
+.item .dot{width:9px;height:9px;border-radius:2px;flex:none}
+.item .grow{flex:1;min-width:0}
+.mbar{height:5px;background:var(--none-soft);border-radius:3px;margin-top:4px;overflow:hidden}
+.mbar i{display:block;height:100%}
 .toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;z-index:9}
 </style>
 </head>
@@ -84,7 +113,11 @@ const SUPA_URL='https://noskbefdrtayhwydlbfx.supabase.co';
 const SUPA_KEY='sb_publishable_5aLhvx4RAy5yqmRuLz4-zg_ZfuEppFV';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 const $=s=>document.querySelector(s);
-const S={user:null, editor:false, supervisores:[], supSel:null, cartera:null, alertas:null, tablero:null, ficha:null, filtro:'abiertas'};
+const S={user:null, editor:false, supervisores:[], supSel:null, cartera:null, alertas:null, tablero:null, ficha:null, filtro:'abiertas', ventas:null, vT:0, vDia:null, vTodos:false};
+const G={4:['Super Premium','s-sp','warn'],3:['Tramo Alto','s-alto','ok'],2:['Tramo Medio','s-medio','calm'],1:['Tramo Base','s-base','none'],0:['Motothings','','none'],'-1':['Sin tramo','','none']};
+const DOW=['dom','lun','mar','mié','jue','vie','sáb'];
+const dt=f=>new Date(f+'T12:00:00');
+const n0=x=>Math.round(Number(x)||0);
 const Q={reconocer:['Reconocer','ok'],destrabar:['Destrabar','warn'],visitar:['Visitar primero','bad'],no_intervenir:['No intervenir','calm'],sin_datos:['Sin datos aún','none']};
 const SEV={alta:'bad',media:'warn',baja:'none',positiva:'ok'};
 const EST={abierta:['Abierta','bad'],pendiente:['Pospuesta','warn'],en_gestion:['En gestión','warn'],escalada:['Escalada','calm'],cerrada:['Cerrada','ok']};
@@ -128,10 +161,54 @@ async function viewCartera(){
 function bindSel(){const s=$('#sel-sup');if(s)s.onchange=()=>{S.supSel=s.value?+s.value:null;route();};}
 function diaClass(d){ if(d.seguimiento==='cumplio')return 'ok'; if(d.toco&&d.compromiso)return 'warn'; if(!d.toco)return 'bad'; return ''; }
 function diaIcon(d){ if(d.marco===false)return '⏰'; if(d.seguimiento==='cumplio')return '✅'; if(d.toco&&d.compromiso)return '🤝'; if(d.toco)return '👆'; return '·'; }
+// ---------- venta en la ficha ----------
+function ventaHTML(){
+  const V=S.ventas||[]; if(!V.length) return '<div class="card hint">Sin tienda vigente: no hay venta que mostrar.</div>';
+  const t=V[S.vT]||V[0], m=t.meta, a=t.acum, per=t.periodo, pila=nice(S.ficha.persona.nombre_pila);
+  const seg=V.length>1?`<div class="seg">${V.map((x,i)=>`<button data-vt="${i}" class="${i===S.vT?'on':''}">${esc(nice(x.tienda))}</button>`).join('')}</div>`:'';
+  const prog=(lbl,val,meta,cls,mark,nota)=>`<div class="prog"><div class="row"><div class="grow">${lbl}</div><div class="num"><b>${n0(val)}</b> de ${meta??'—'}${meta?` · ${Math.round(100*val/meta)}%`:''}</div></div>
+    <div class="bar"><i class="${cls}" style="width:${meta?Math.min(100,100*val/meta):0}%"></i>${mark?`<em style="left:${mark}%"></em>`:''}</div>${nota?`<div class="hint" style="margin-top:3px">${nota}</div>`:''}</div>`;
+  let notaLlave='';
+  if(m){ const falta=m.llave-n0(a.tel); notaLlave=falta<=0?'Pozo Variable abierto (pasó el 70%).':`Faltan ${falta} para la llave del 70% (${m.llave})${per.dias_restantes>0?`: ${(falta/per.dias_restantes).toFixed(1)} al día en los ${per.dias_restantes} días que quedan`:''}.`; }
+  const resumen=`<div class="card">${m?prog('Volumen (Pozo Variable)',a.tel,m.total,'',70,notaLlave)+prog('Tramo Medio',a.medio,m.medio,'s-medio')+prog('Tramo Alto',a.alto,m.alto,'s-alto'):`<div><b class="num">${n0(a.tel)}</b> equipos en ${esc(per.nombre)} · sin meta cargada</div>`}
+    <div class="chips"><span class="pill warn">Super Premium ${n0(a.sp)}</span><span class="pill none">Motothings ${n0(a.things)}</span>${n0(a.sin_tramo)?`<span class="pill none">Sin tramo ${n0(a.sin_tramo)}</span>`:''}</div>
+    ${t.n_promotores>1?`<div class="hint" style="margin-top:8px">Tienda con ${t.n_promotores} promotores: la meta y la venta son de la tienda. A nombre de ${esc(pila)}: ${n0(a.propias)} de ${n0(a.tel)+n0(a.things)+n0(a.sin_tramo)}.</div>`:(n0(a.propias)<n0(a.tel)+n0(a.things)+n0(a.sin_tramo)?`<div class="hint" style="margin-top:8px">${n0(a.propias)} de ${n0(a.tel)+n0(a.things)+n0(a.sin_tramo)} unidades están a nombre de ${esc(pila)} en MotoTalk; el resto las cargó otra persona.</div>`:'')}</div>`;
+  const dias=t.dias||[], mx=Math.max(1,...dias.map(d=>n0(d.tel)));
+  if(!S.vDia||!dias.some(d=>d.fecha===S.vDia)){ const con=dias.filter(d=>n0(d.tel)+n0(d.things)+n0(d.sin_tramo)>0); S.vDia=(con.length?con[con.length-1]:dias[dias.length-1]||{}).fecha||null; }
+  const col=d=>{const D=dt(d.fecha), fin=[0,6].includes(D.getDay()); const h=k=>Math.round(92*n0(d[k])/mx);
+    return `<button type="button" class="col ${d.fecha===S.vDia?'on':''} ${fin?'finde':''}" data-dia="${d.fecha}" aria-label="${DOW[D.getDay()]} ${D.getDate()}: ${n0(d.tel)} equipos"><span class="n">${n0(d.tel)||''}</span>
+      <span class="stack">${['sp','alto','medio','base'].filter(k=>n0(d[k])>0).map(k=>`<i class="s-${k}" style="height:${Math.max(3,h(k))}px"></i>`).join('')}</span>
+      <span class="d">${DOW[D.getDay()]}<b>${D.getDate()}</b></span><span class="th">${n0(d.things)?'+'+n0(d.things):''}</span></button>`;};
+  const prom=dias.length?(dias.reduce((s,d)=>s+n0(d.tel),0)/dias.length).toFixed(1):'0';
+  const chart=`<div class="card"><div class="row"><div class="grow name">Día a día</div><div class="sub num">${prom} equipos/día</div></div>
+    <div class="chart" id="chart">${dias.map(col).join('')}</div>
+    <div class="legend"><span><i class="s-sp"></i>Super Premium</span><span><i class="s-alto"></i>Alto</span><span><i class="s-medio"></i>Medio</span><span><i class="s-base"></i>Base</span><span>+n = Motothings</span></div></div>`;
+  const dsel=dias.find(d=>d.fecha===S.vDia), det=(t.detalle||[]).filter(x=>x.fecha===S.vDia);
+  const item=(x,max)=>`<div class="item"><span class="dot ${G[x.rango][1]||''}" style="${G[x.rango][1]?'':'background:var(--line)'}"></span><div class="grow"><div>${esc(x.modelo)}</div><div class="sub">${G[x.rango][0]}${x.propias!=null&&n0(x.propias)<n0(x.u)?` · ${n0(x.propias)} a su nombre`:''}${n0(x.retro)?` · ${n0(x.retro)} cargada${n0(x.retro)>1?'s':''} después`:''}</div>${max?`<div class="mbar"><i class="${G[x.rango][1]||'s-base'}" style="width:${Math.round(100*n0(x.u)/max)}%"></i></div>`:''}</div><div class="q">${n0(x.u)}</div></div>`;
+  let diaCard='';
+  if(dsel){ const D=dt(dsel.fecha), tot=n0(dsel.tel);
+    diaCard=`<div class="card"><div class="row"><div class="grow name">${cap(DOW[D.getDay()])} ${D.getDate()} · ${tot} equipo${tot===1?'':'s'}${n0(dsel.things)?` + ${n0(dsel.things)} Motothings`:''}</div></div>
+      ${det.length?det.map(x=>item(x)).join(''):'<div class="hint" style="margin-top:6px">Sin venta registrada en MotoTalk ese día.</div>'}
+      ${n0(dsel.max_fila)>=10?`<div class="hint" style="margin-top:8px">⚠️ Una sola carga de ${n0(dsel.max_fila)} unidades: posible masivo.</div>`:''}</div>`; }
+  const mods=t.modelos||[], mmax=Math.max(1,...mods.map(x=>n0(x.u))), lim=S.vTodos?mods:mods.slice(0,6);
+  const mesCard=`<div class="card"><div class="row"><div class="grow name">Qué ha vendido en ${esc(per.nombre)}</div><div class="sub num">${mods.length} modelos</div></div>
+    ${lim.map(x=>item({...x,propias:null,retro:0},mmax)).join('')||'<div class="hint" style="margin-top:6px">Sin venta en el período.</div>'}
+    ${mods.length>6?`<div class="btns"><button class="btn" id="v-todos">${S.vTodos?'Ver menos':`Ver los ${mods.length}`}</button></div>`:''}</div>`;
+  return seg+resumen+chart+diaCard+mesCard;
+}
+function bindVentas(scroll){
+  const box=$('#ventas'); if(!box) return;
+  box.querySelectorAll('[data-dia]').forEach(b=>b.onclick=()=>{const ch=$('#chart'), sl=ch?ch.scrollLeft:0; S.vDia=b.dataset.dia; box.innerHTML=ventaHTML(); bindVentas(false); const c2=$('#chart'); if(c2) c2.scrollLeft=sl;});
+  box.querySelectorAll('[data-vt]').forEach(b=>b.onclick=()=>{S.vT=+b.dataset.vt; S.vDia=null; S.vTodos=false; box.innerHTML=ventaHTML(); bindVentas(true);});
+  const vt=$('#v-todos'); if(vt) vt.onclick=()=>{S.vTodos=!S.vTodos; const ch=$('#chart'), sl=ch?ch.scrollLeft:0; box.innerHTML=ventaHTML(); bindVentas(false); const c2=$('#chart'); if(c2) c2.scrollLeft=sl;};
+  if(scroll){ const ch=$('#chart'), on=ch&&ch.querySelector('.col.on'); if(on) ch.scrollLeft=on.offsetLeft-ch.clientWidth/2; }
+}
 async function viewFicha(id){
   nav('cartera');
   $('#app').innerHTML='<div class="empty">Cargando ficha…</div>';
-  try{ S.ficha=await rpc('sup_ficha',{p_persona:+id,p_fecha:new Date().toISOString().slice(0,10)}); }catch(e){$('#app').innerHTML=`<div class="err">${esc(errMsg(e))}</div><div class="btns"><a class="btn" href="#cartera">Volver</a></div>`;return;}
+  const hoy=new Date().toISOString().slice(0,10);
+  S.ventas=null; S.vT=0; S.vDia=null; S.vTodos=false;
+  try{ [S.ficha,S.ventas]=await Promise.all([rpc('sup_ficha',{p_persona:+id,p_fecha:hoy}), rpc('sup_ventas',{p_persona:+id,p_fecha:hoy}).catch(()=>null)]); }catch(e){$('#app').innerHTML=`<div class="err">${esc(errMsg(e))}</div><div class="btns"><a class="btn" href="#cartera">Volver</a></div>`;return;}
   const f=S.ficha, p=f.persona;
   const dias=f.dias.slice(0,20);
   const abiertas=f.alertas.filter(a=>['abierta','pendiente','en_gestion','escalada'].includes(a.estado));
@@ -141,8 +218,9 @@ async function viewFicha(id){
   <div class="card"><div class="name" style="font-size:18px">${esc(nice(p.nombre_pila))} <span class="sub" style="display:inline">${esc(nice(p.nombre))}</span></div><div class="sub">${esc(nice(p.tienda||''))} · ${esc(p.cuenta||'')}</div>
   <div class="hint" style="margin-top:6px">${p.consentimiento?`Consentimiento ${fecha(p.consentimiento)}`:'Sin consentimiento registrado'}${p.baja?` · <b>BAJA ${fecha(p.baja)}</b>`:''}</div></div>
   ${abiertas.length?`<div class="eyebrow">Alertas abiertas</div>${abiertas.map(cardAlerta).join('')}`:''}
-  <div class="eyebrow">Últimos ${dias.length} turnos</div>
-  <div class="card"><div class="strip">${dias.map(d=>`<div class="day ${diaClass(d)}" title="${esc(d.escenario||'')}"><b>${fecha(d.fecha).replace('.','')}</b><span>${diaIcon(d)}</span>${d.venta!=null?`<span class="num" style="font-size:11px">${d.venta}</span>`:''}</div>`).join('')||'<span class="hint">Sin datos del copiloto todavía.</span>'}</div>
+  <div class="eyebrow">Venta · MotoTalk</div><div id="ventas">${S.ventas?ventaHTML():'<div class="card hint">No se pudo cargar la venta.</div>'}</div>
+  <div class="eyebrow">Copiloto · últimos ${dias.length} turnos</div>
+  <div class="card">${dias.length?'':'<div class="hint">Sin datos del copiloto todavía.</div>'}<div class="strip">${dias.map(d=>`<div class="day ${diaClass(d)}" title="${esc(d.escenario||'')}"><b>${fecha(d.fecha).replace('.','')}</b><span>${diaIcon(d)}</span>${d.venta!=null?`<span class="num" style="font-size:11px">${d.venta}</span>`:''}</div>`).join('')}</div>
   <p class="hint">✅ cumplió · 🤝 se comprometió · 👆 tocó · ⏰ sin marcación · número = venta MotoTalk del día</p></div>
   <div class="eyebrow">Lo que dice</div>
   <div class="card">${Object.keys(objeciones).length?`<div><b>Objeciones:</b> ${Object.entries(objeciones).map(([k,v])=>`${esc(k)} (${v})`).join(', ')}</div>`:''}
@@ -151,7 +229,7 @@ async function viewFicha(id){
   ${!Object.keys(objeciones).length&&!Object.keys(prefieren).length&&!f.dias.filter(d=>d.dificil||d.tarde).length?'<span class="hint">Todavía no registra objeciones ni motivos.</span>':''}</div>
   <div class="eyebrow">Historial de alertas (90 días)</div>
   ${f.alertas.filter(a=>a.estado==='cerrada').map(cardAlerta).join('')||'<div class="card hint">Sin alertas cerradas.</div>'}`;
-  bindAlertas();
+  bindAlertas(); bindVentas(true);
 }
 function cardAlerta(a){
   const open=['abierta','pendiente'].includes(a.estado), ges=a.estado==='en_gestion';
